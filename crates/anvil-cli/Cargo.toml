@@ -1,0 +1,24 @@
+[package]
+name = "anvil-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "CLI tool for the Anvil universal template engine"
+
+[[bin]]
+name = "anvil"
+path = "src/main.rs"
+
+[dependencies]
+# Workspace dependencies
+anvil-engine = { path = "../anvil-engine" }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+
+# CLI-specific dependencies
+clap = { version = "4.4", features = ["derive"] }
+indicatif = "0.17"
+colored = "2.0"
+inquire = "0.7"

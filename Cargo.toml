@@ -1,6 +1,21 @@
-[package]
-name = "anvil"
+[workspace]
+members = [
+    "crates/anvil-cli",
+    "crates/anvil-engine",
+]
+resolver = "2"
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
+authors = ["Amruth Niranjan"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/amruth-sn/anvil"
 
-[dependencies]
+[workspace.dependencies]
+# Shared dependencies across crates
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+anyhow = "1.0"
+thiserror = "1.0"

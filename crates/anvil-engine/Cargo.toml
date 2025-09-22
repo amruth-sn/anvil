@@ -1,0 +1,26 @@
+[package]
+name = "anvil-engine"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core template engine for Anvil"
+
+[dependencies]
+# Workspace dependencies
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Engine-specific dependencies
+tera = "1.19"
+walkdir = "2.4"
+regex = "1.10"
+semver = "1.0"
+
+[dev-dependencies]
+tempfile = "3.8"
+tokio-test = "0.4"
