@@ -1,0 +1,513 @@
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use tera::Tera;
+use walkdir::WalkDir;
+use serde_yaml::Value;
+
+use crate::config::TemplateConfig;
+use crate::error::{EngineError, EngineResult};
+
+/// Context for template processing with variable substitution
+#[derive(Debug, Clone)]
+pub struct Context {
+    variables: HashMap<String, Value>,
+    features: Vec<String>,
+}
+
+impl Context {
+    /// Create a new empty context
+    pub fn new() -> Self {
+        Self {
+            variables: HashMap::new(),
+            features: Vec::new(),
+        }
+    }
+
+    /// Create a context builder for fluent API
+    pub fn builder() -> ContextBuilder {
+        ContextBuilder::new()
+    }
+
+    /// Add a variable to the context
+    pub fn add_variable(&mut self, name: String, value: Value) {
+        self.variables.insert(name, value);
+    }
+
+    /// Get a variable from the context
+    pub fn get_variable(&self, name: &str) -> Option<&Value> {
+        self.variables.get(name)
+    }
+
+    /// Add a feature to the context
+    pub fn add_feature(&mut self, feature: String) {
+        if !self.features.contains(&feature) {
+            self.features.push(feature);
+        }
+    }
+
+    /// Check if a feature is enabled
+    pub fn has_feature(&self, feature: &str) -> bool {
+        self.features.contains(&feature.to_string())
+    }
+
+    /// Get all variables
+    pub fn variables(&self) -> &HashMap<String, Value> {
+        &self.variables
+    }
+
+    /// Get all features
+    pub fn features(&self) -> &[String] {
+        &self.features
+    }
+
+    /// Convert to Tera context for template rendering
+    pub fn to_tera_context(&self) -> tera::Context {
+        let mut tera_context = tera::Context::new();
+        
+        // Add all variables
+        for (key, value) in &self.variables {
+            tera_context.insert(key, value);
+        }
+        
+        // Add features as both array and individual boolean flags
+        tera_context.insert("features", &self.features);
+        for feature in &self.features {
+            tera_context.insert(&format!("feature_{}", feature), &true);
+        }
+        
+        tera_context
+    }
+}
+
+impl Default for Context {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Builder for creating contexts with fluent API
+#[derive(Debug)]
+pub struct ContextBuilder {
+    context: Context,
+}
+
+impl ContextBuilder {
+    /// Create a new context builder
+    pub fn new() -> Self {
+        Self {
+            context: Context::new(),
+        }
+    }
+
+    /// Add a variable to the context
+    pub fn variable(mut self, name: impl Into<String>, value: impl Into<Value>) -> Self {
+        self.context.add_variable(name.into(), value.into());
+        self
+    }
+
+    /// Add a feature to the context
+    pub fn feature(mut self, feature: impl Into<String>) -> Self {
+        self.context.add_feature(feature.into());
+        self
+    }
+
+    /// Build the final context
+    pub fn build(self) -> Context {
+        self.context
+    }
+}
+
+/// Template file discovered during processing
+#[derive(Debug, Clone)]
+pub struct TemplateFile {
+    pub source_path: PathBuf,
+    pub relative_path: PathBuf,
+    pub output_path: PathBuf,
+    pub content: String,
+}
+
+/// Result of template processing
+#[derive(Debug)]
+pub struct ProcessedTemplate {
+    pub files: Vec<ProcessedFile>,
+}
+
+/// Individual processed file
+#[derive(Debug)]
+pub struct ProcessedFile {
+    pub output_path: PathBuf,
+    pub content: String,
+    pub executable: bool,
+}
+
+/// Core template engine using Tera
+pub struct TemplateEngine {
+    tera: Tera,
+}
+
+impl TemplateEngine {
+    /// Create a new template engine
+    pub fn new() -> EngineResult<Self> {
+        let mut tera = Tera::new("templates/**/*").map_err(EngineError::ProcessingError)?;
+        
+        // Add custom filters
+        tera.register_filter("snake_case", Self::snake_case_filter);
+        tera.register_filter("pascal_case", Self::pascal_case_filter);
+        tera.register_filter("kebab_case", Self::kebab_case_filter);
+        tera.register_filter("rust_module_name", Self::rust_module_name_filter);
+        
+        Ok(Self { tera })
+    }
+
+    /// Create a template engine for testing with no default patterns
+    pub fn new_for_testing() -> EngineResult<Self> {
+        let mut tera = Tera::default();
+        
+        // Add custom filters
+        tera.register_filter("snake_case", Self::snake_case_filter);
+        tera.register_filter("pascal_case", Self::pascal_case_filter);
+        tera.register_filter("kebab_case", Self::kebab_case_filter);
+        tera.register_filter("rust_module_name", Self::rust_module_name_filter);
+        
+        Ok(Self { tera })
+    }
+
+    /// Discover template files in a directory
+    pub fn discover_template_files(
+        &self,
+        template_dir: &Path,
+    ) -> EngineResult<Vec<TemplateFile>> {
+        let mut files = Vec::new();
+        
+        for entry in WalkDir::new(template_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+        {
+            let source_path = entry.path().to_path_buf();
+            
+            // Skip the anvil.yaml config file
+            if source_path.file_name().and_then(|n| n.to_str()) == Some("anvil.yaml") {
+                continue;
+            }
+            
+            let relative_path = source_path
+                .strip_prefix(template_dir)
+                .map_err(|_| EngineError::invalid_config("Invalid template path"))?
+                .to_path_buf();
+            
+            // Determine output path (remove .tera extension if present)
+            let output_path = if let Some(stem) = relative_path.file_stem() {
+                if relative_path.extension().and_then(|e| e.to_str()) == Some("tera") {
+                    relative_path.with_file_name(stem)
+                } else {
+                    relative_path.clone()
+                }
+            } else {
+                relative_path.clone()
+            };
+            
+            // Read file content
+            let content = std::fs::read_to_string(&source_path)
+                .map_err(|e| EngineError::file_error(&source_path, e))?;
+            
+            files.push(TemplateFile {
+                source_path,
+                relative_path,
+                output_path,
+                content,
+            });
+        }
+        
+        Ok(files)
+    }
+
+    /// Process all template files with the given context
+    pub async fn process_template(
+        &mut self,
+        template_dir: &Path,
+        context: &Context,
+    ) -> EngineResult<ProcessedTemplate> {
+        let template_files = self.discover_template_files(template_dir)?;
+        let tera_context = context.to_tera_context();
+        
+        let mut processed_files = Vec::new();
+        
+        for template_file in template_files {
+            let processed_content = if template_file.source_path.extension().and_then(|e| e.to_str()) == Some("tera") {
+                // Process as Tera template
+                self.tera.render_str(&template_file.content, &tera_context)
+                    .map_err(EngineError::ProcessingError)?
+            } else {
+                // Copy as-is (binary files, etc.)
+                template_file.content
+            };
+            
+            // Determine if file should be executable
+            let executable = self.should_be_executable(&template_file.output_path);
+            
+            processed_files.push(ProcessedFile {
+                output_path: template_file.output_path,
+                content: processed_content,
+                executable,
+            });
+        }
+        
+        Ok(ProcessedTemplate {
+            files: processed_files,
+        })
+    }
+
+    /// Process a single template string with context
+    pub fn render_string(&mut self, template: &str, context: &Context) -> EngineResult<String> {
+        let tera_context = context.to_tera_context();
+        self.tera.render_str(template, &tera_context)
+            .map_err(EngineError::ProcessingError)
+    }
+
+    /// Validate variable values against template configuration
+    pub fn validate_context(
+        &self,
+        context: &Context,
+        config: &TemplateConfig,
+    ) -> EngineResult<()> {
+        // Check required variables
+        for variable in &config.variables {
+            if variable.required {
+                if !context.variables.contains_key(&variable.name) {
+                    return Err(EngineError::variable_error(
+                        &variable.name,
+                        "Required variable not provided",
+                    ));
+                }
+            }
+            
+            // Validate variable values if present
+            if let Some(value) = context.get_variable(&variable.name) {
+                variable.validate_value(value)?;
+            }
+        }
+        
+        Ok(())
+    }
+
+    /// Determine if a file should be executable based on its path
+    fn should_be_executable(&self, path: &Path) -> bool {
+        if let Some(extension) = path.extension().and_then(|e| e.to_str()) {
+            matches!(extension, "sh" | "py" | "rb" | "pl")
+        } else {
+            // Check for common executable names
+            if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+                matches!(filename, "gradlew" | "mvnw" | "install" | "configure" | "bootstrap")
+            } else {
+                false
+            }
+        }
+    }
+
+    // Custom Tera filters
+
+    /// Convert string to snake_case
+    fn snake_case_filter(value: &tera::Value, _: &HashMap<String, tera::Value>) -> tera::Result<tera::Value> {
+        let s = value.as_str().ok_or_else(|| tera::Error::msg("Value must be a string"))?;
+        let snake_case = s
+            .chars()
+            .enumerate()
+            .map(|(i, c)| {
+                if c.is_uppercase() && i > 0 {
+                    format!("_{}", c.to_lowercase())
+                } else {
+                    c.to_lowercase().to_string()
+                }
+            })
+            .collect::<String>()
+            .replace(' ', "_")
+            .replace('-', "_");
+        Ok(tera::Value::String(snake_case))
+    }
+
+    /// Convert string to PascalCase
+    fn pascal_case_filter(value: &tera::Value, _: &HashMap<String, tera::Value>) -> tera::Result<tera::Value> {
+        let s = value.as_str().ok_or_else(|| tera::Error::msg("Value must be a string"))?;
+        let pascal_case = s
+            .split(&[' ', '_', '-'][..])
+            .map(|word| {
+                let mut chars = word.chars();
+                match chars.next() {
+                    None => String::new(),
+                    Some(first) => first.to_uppercase().collect::<String>() + &chars.as_str().to_lowercase(),
+                }
+            })
+            .collect::<String>();
+        Ok(tera::Value::String(pascal_case))
+    }
+
+    /// Convert string to kebab-case
+    fn kebab_case_filter(value: &tera::Value, _: &HashMap<String, tera::Value>) -> tera::Result<tera::Value> {
+        let s = value.as_str().ok_or_else(|| tera::Error::msg("Value must be a string"))?;
+        let kebab_case = s
+            .chars()
+            .enumerate()
+            .map(|(i, c)| {
+                if c.is_uppercase() && i > 0 {
+                    format!("-{}", c.to_lowercase())
+                } else {
+                    c.to_lowercase().to_string()
+                }
+            })
+            .collect::<String>()
+            .replace(' ', "-")
+            .replace('_', "-");
+        Ok(tera::Value::String(kebab_case))
+    }
+
+    /// Convert string to valid Rust module name
+    fn rust_module_name_filter(value: &tera::Value, _: &HashMap<String, tera::Value>) -> tera::Result<tera::Value> {
+        let s = value.as_str().ok_or_else(|| tera::Error::msg("Value must be a string"))?;
+        let module_name = s
+            .chars()
+            .enumerate()
+            .map(|(i, c)| {
+                if c.is_uppercase() && i > 0 {
+                    format!("_{}", c.to_lowercase())
+                } else if c.is_alphanumeric() || c == '_' {
+                    c.to_lowercase().to_string()
+                } else {
+                    "_".to_string()
+                }
+            })
+            .collect::<String>()
+            .replace(' ', "_")
+            .replace('-', "_");
+        
+        // Ensure it starts with a letter or underscore
+        let module_name = if module_name.chars().next().map_or(false, |c| c.is_numeric()) {
+            format!("_{}", module_name)
+        } else {
+            module_name
+        };
+        
+        Ok(tera::Value::String(module_name))
+    }
+}
+
+impl Default for TemplateEngine {
+    fn default() -> Self {
+        Self::new().expect("Failed to create default template engine")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+    use std::fs;
+
+    #[test]
+    fn test_context_builder() {
+        let context = Context::builder()
+            .variable("project_name", "test-project")
+            .variable("author", "Test Author")
+            .feature("database")
+            .feature("auth")
+            .build();
+        
+        assert_eq!(context.get_variable("project_name").unwrap().as_str().unwrap(), "test-project");
+        assert_eq!(context.get_variable("author").unwrap().as_str().unwrap(), "Test Author");
+        assert!(context.has_feature("database"));
+        assert!(context.has_feature("auth"));
+        assert!(!context.has_feature("nonexistent"));
+    }
+
+    #[test]
+    fn test_template_engine_creation() {
+        let engine = TemplateEngine::new_for_testing().unwrap();
+        assert!(true); // Just test it doesn't panic
+    }
+
+    #[test]
+    fn test_render_string() {
+        let mut engine = TemplateEngine::new_for_testing().unwrap();
+        let context = Context::builder()
+            .variable("name", "World")
+            .build();
+        
+        let result = engine.render_string("Hello, {{ name }}!", &context).unwrap();
+        assert_eq!(result, "Hello, World!");
+    }
+
+    #[test]
+    fn test_custom_filters() {
+        let mut engine = TemplateEngine::new_for_testing().unwrap();
+        let context = Context::builder()
+            .variable("project_name", "MyAwesomeProject")
+            .build();
+        
+        // Test snake_case filter
+        let result = engine.render_string("{{ project_name | snake_case }}", &context).unwrap();
+        assert_eq!(result, "my_awesome_project");
+        
+        // Test pascal_case filter
+        let result = engine.render_string("{{ project_name | pascal_case }}", &context).unwrap();
+        assert_eq!(result, "MyAwesomeProject");
+        
+        // Test kebab_case filter
+        let result = engine.render_string("{{ project_name | kebab_case }}", &context).unwrap();
+        assert_eq!(result, "my-awesome-project");
+        
+        // Test rust_module_name filter
+        let result = engine.render_string("{{ project_name | rust_module_name }}", &context).unwrap();
+        assert_eq!(result, "my_awesome_project");
+    }
+
+    #[tokio::test]
+    async fn test_template_file_discovery() {
+        let temp_dir = TempDir::new().unwrap();
+        let template_dir = temp_dir.path().join("template");
+        fs::create_dir_all(&template_dir).unwrap();
+        
+        // Create test files
+        fs::write(template_dir.join("file.txt.tera"), "Hello {{ name }}").unwrap();
+        fs::write(template_dir.join("static.md"), "# README").unwrap();
+        fs::write(template_dir.join("anvil.yaml"), "name: test").unwrap(); // Should be ignored
+        
+        let engine = TemplateEngine::new_for_testing().unwrap();
+        let files = engine.discover_template_files(&template_dir).unwrap();
+        
+        assert_eq!(files.len(), 2); // anvil.yaml should be ignored
+        
+        let template_file = files.iter().find(|f| f.relative_path.to_str().unwrap() == "file.txt.tera").unwrap();
+        assert_eq!(template_file.output_path, PathBuf::from("file.txt"));
+        
+        let static_file = files.iter().find(|f| f.relative_path.to_str().unwrap() == "static.md").unwrap();
+        assert_eq!(static_file.output_path, PathBuf::from("static.md"));
+    }
+
+    #[tokio::test]
+    async fn test_template_processing() {
+        let temp_dir = TempDir::new().unwrap();
+        let template_dir = temp_dir.path().join("template");
+        std::fs::create_dir_all(&template_dir).unwrap();
+        
+        // Create a template file
+        std::fs::write(
+            template_dir.join("main.rs.tera"),
+            r#"fn main() {
+    println!("Hello from {{ project_name | pascal_case }}!");
+}
+"#,
+        ).unwrap();
+        
+        let mut engine = TemplateEngine::new_for_testing().unwrap();
+        let context = Context::builder()
+            .variable("project_name", "my-project")
+            .build();
+        
+        let result = engine.process_template(&template_dir, &context).await.unwrap();
+        
+        assert_eq!(result.files.len(), 1);
+        let file = &result.files[0];
+        assert_eq!(file.output_path, PathBuf::from("main.rs"));
+        assert!(file.content.contains("Hello from MyProject!"));
+    }
+}
