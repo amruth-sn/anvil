@@ -22,3 +22,4 @@ clap = { version = "4.4", features = ["derive"] }
 indicatif = "0.17"
 colored = "2.0"
 inquire = "0.7"
+env_logger = "0.11"
