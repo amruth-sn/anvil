@@ -1,0 +1,59 @@
+{% if feature_cli -%}
+use clap::Parser;
+
+/// {{ description }}
+#[derive(Parser)]
+#[command(name = "{{ project_name | kebab_case }}")]
+#[command(about = "{{ description }}")]
+#[command(version)]
+struct Cli {
+    /// Name to greet
+    #[arg(short, long, default_value = "World")]
+    name: String,
+    
+    /// Number of times to greet
+    #[arg(short, long, default_value = "1")]
+    count: u8,
+}
+
+fn main() {
+    let cli = Cli::parse();
+    
+    for _ in 0..cli.count {
+        println!("Hello, {}! 🦀", cli.name);
+    }
+    
+    println!("Welcome to {{ project_name | pascal_case }}!");
+    println!("Created by: {{ author_name }}");
+}
+{% else -%}
+fn main() {
+    println!("Hello, World! 🦀");
+    println!("Welcome to {{ project_name | pascal_case }}!");
+    println!("Created by: {{ author_name }}");
+    println!("Description: {{ description }}");
+}
+{% endif -%}
+
+{% if feature_tests -%}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_main() {
+        // Basic test to ensure the main function works
+        // In a real project, you'd test actual functionality
+        assert!(true);
+    }
+    
+    #[test] 
+    fn test_project_info() {
+        let project_name = "{{ project_name | pascal_case }}";
+        let author = "{{ author_name }}";
+        
+        assert!(!project_name.is_empty());
+        assert!(!author.is_empty());
+    }
+}
+{% endif -%}

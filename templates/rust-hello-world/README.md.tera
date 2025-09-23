@@ -1,0 +1,74 @@
+# {{ project_name | pascal_case }}
+
+{{ description }}
+
+## About
+
+This project was created by {{ author_name }} using the Anvil template engine.
+
+## Features
+
+{% if feature_cli -%}
+- ✅ Command-line interface with argument parsing
+{% endif -%}
+{% if feature_tests -%}
+- ✅ Unit tests included
+{% endif -%}
+- 🦀 Written in Rust
+- ⚡ Fast and reliable
+
+## Usage
+
+### Building
+
+```bash
+cargo build
+```
+
+### Running
+
+{% if feature_cli -%}
+```bash
+# Run with default options
+cargo run
+
+# Run with custom name
+cargo run -- --name "Rustacean"
+
+# Run multiple times
+cargo run -- --name "Rust" --count 3
+
+# Show help
+cargo run -- --help
+```
+{% else -%}
+```bash
+cargo run
+```
+{% endif -%}
+
+{% if feature_tests -%}
+### Testing
+
+```bash
+cargo test
+```
+{% endif -%}
+
+## Project Structure
+
+```
+{{ project_name | kebab_case }}/
+├── Cargo.toml          # Project configuration
+├── README.md           # This file
+└── src/
+    └── main.rs         # Main application code
+```
+
+## Author
+
+**{{ author_name }}**
+
+---
+
+*Generated with [Anvil](https://github.com/amruth-sn/anvil) 🛠️*

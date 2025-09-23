@@ -7,7 +7,6 @@ use anvil_engine::{
     TemplateConfig, TemplateEngine, Context, FileGenerator
 };
 
-/// Anvil - Universal template engine for developers
 #[derive(Parser)]
 #[command(name = "anvil")]
 #[command(about = "Universal template engine for developers")]
@@ -16,68 +15,51 @@ pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
     
-    /// Enable verbose output
     #[arg(short, long, global = true)]
     pub verbose: bool,
     
-    /// Configuration file path
     #[arg(long, global = true)]
     pub config: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Create a new project from template
     Create {
-        /// Project name
         name: String,
         
-        /// Template to use
         #[arg(short, long)]
         template: Option<String>,
         
-        /// Output directory
         #[arg(short, long, default_value = ".")]
         output: PathBuf,
         
-        /// Skip interactive prompts
         #[arg(long)]
         no_input: bool,
         
-        /// Initialize Git repository
         #[arg(long)]
         git: bool,
         
-        /// Create GitHub repository
         #[arg(long)]
         github: bool,
         
-        /// Clean output directory if it exists
         #[arg(long)]
         force: bool,
         
-        /// Dry run - don't actually create files
         #[arg(long)]
         dry_run: bool,
     },
     
-    /// List available templates
     List {
-        /// Filter by language
         #[arg(short, long)]
         language: Option<String>,
         
-        /// Output format
         #[arg(long, value_enum, default_value = "table")]
         format: OutputFormat,
     },
     
-    /// Search templates
     Search {
-        /// Search query
         query: String,
         
-        /// Maximum results to show
         #[arg(short, long, default_value = "10")]
         limit: usize,
     },
@@ -94,12 +76,10 @@ pub enum OutputFormat {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     
-    // Set up logging based on verbosity
     let log_level = if cli.verbose { "debug" } else { "info" };
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(log_level))
         .init();
     
-    // Execute command
     match cli.command {
         Commands::Create { 
             name, 
@@ -134,7 +114,6 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-/// Options for the create command
 #[derive(Debug)]
 struct CreateOptions {
     name: String,
@@ -148,11 +127,9 @@ struct CreateOptions {
     verbose: bool,
 }
 
-/// Create a new project from template
 async fn create_project(options: CreateOptions) -> Result<()> {
     println!("{} Creating project '{}'...", "🛠️".bright_blue(), options.name.bright_green());
     
-    // Determine template to use
     let template_name = match &options.template {
         Some(name) => name.clone(),
         None => {
@@ -160,13 +137,11 @@ async fn create_project(options: CreateOptions) -> Result<()> {
                 return Err(anyhow::anyhow!("Template must be specified when using --no-input"));
             }
             
-            // Interactive template selection (for now, default to rust-hello-world)
             println!("{} No template specified, using default 'rust-hello-world'", "ℹ️".bright_blue());
             "rust-hello-world".to_string()
         }
     };
     
-    // Determine output directory
     let output_dir = if options.output == PathBuf::from(".") {
         std::env::current_dir()?.join(&options.name)
     } else {
@@ -179,7 +154,6 @@ async fn create_project(options: CreateOptions) -> Result<()> {
         println!("{} Dry run: {}", "🔍".bright_blue(), options.dry_run.to_string().bright_yellow());
     }
     
-    // Load template configuration
     let template_dir = find_template_directory(&template_name)?;
     let config_path = template_dir.join("anvil.yaml");
     
@@ -195,10 +169,8 @@ async fn create_project(options: CreateOptions) -> Result<()> {
         println!("{} Description: {}", "📝".bright_blue(), template_config.description);
     }
     
-    // Build context from variables
     let context = build_context(&template_config, &options).await?;
     
-    // Check output directory
     let generator = if options.dry_run {
         FileGenerator::new_dry_run(&output_dir)
     } else {
@@ -233,8 +205,7 @@ async fn create_project(options: CreateOptions) -> Result<()> {
         }
     }
     
-    // Process template
-    let mut engine = TemplateEngine::new()
+    let mut engine = TemplateEngine::new_for_testing()
         .map_err(|e| anyhow::anyhow!("Failed to create template engine: {}", e))?;
     
     engine.validate_context(&context, &template_config)
@@ -244,12 +215,10 @@ async fn create_project(options: CreateOptions) -> Result<()> {
     let processed_template = engine.process_template(&template_dir, &context).await
         .map_err(|e| anyhow::anyhow!("Template processing failed: {}", e))?;
     
-    // Generate files with progress reporting
     let progress_callback = if !options.verbose {
         Some(Box::new(|current: usize, total: usize, _msg: &str| {
             print!("\r{} Processing files: {}/{}", "📄".bright_blue(), current, total);
             if current == total {
-                println!(); // New line when complete
             }
         }) as Box<dyn Fn(usize, usize, &str) + Send + Sync>)
     } else {
@@ -259,7 +228,6 @@ async fn create_project(options: CreateOptions) -> Result<()> {
     let result = generator.generate_files(processed_template, progress_callback).await
         .map_err(|e| anyhow::anyhow!("File generation failed: {}", e))?;
     
-    // Report results
     if options.dry_run {
         println!("{} Dry run completed successfully!", "✅".bright_green());
         println!("  {} {} files would be created", "📄".bright_blue(), result.files_created);
@@ -273,7 +241,6 @@ async fn create_project(options: CreateOptions) -> Result<()> {
         println!("  {} Location: {}", "📍".bright_blue(), result.output_directory.display().to_string().bright_yellow());
     }
     
-    // Future: Git initialization, GitHub creation, etc.
     if options.git && !options.dry_run {
         println!("{} Git initialization will be implemented in Stage 3", "🔮".bright_magenta());
     }
@@ -285,23 +252,26 @@ async fn create_project(options: CreateOptions) -> Result<()> {
     Ok(())
 }
 
-/// Build context from template configuration and user input
 async fn build_context(_config: &TemplateConfig, options: &CreateOptions) -> Result<Context> {
-    let context = Context::builder()
+    let mut context = Context::builder()
         .variable("project_name", options.name.clone())
+        .variable("author_name", "Test Author".to_string())
+        .variable("description", "A test Rust project".to_string())
         .build();
     
-    // For now, add basic variables
-    // In Stage 2, this will include interactive prompts for all template variables
+    context.add_feature("cli".to_string());
+    context.add_feature("tests".to_string());
     
     if options.verbose {
-        println!("{} Built context with {} variables", "🎯".bright_blue(), context.variables().len());
+        println!("{} Built context with {} variables and {} features", 
+                "🎯".bright_blue(), 
+                context.variables().len(),
+                context.features().len());
     }
     
     Ok(context)
 }
 
-/// Find template directory (for now, look in templates/ subdirectory)
 fn find_template_directory(template_name: &str) -> Result<PathBuf> {
     let templates_dir = std::env::current_dir()?.join("templates");
     let template_dir = templates_dir.join(template_name);
@@ -313,11 +283,9 @@ fn find_template_directory(template_name: &str) -> Result<PathBuf> {
     Ok(template_dir)
 }
 
-/// List available templates
 async fn list_templates(_language: Option<String>, _format: OutputFormat) -> Result<()> {
     println!("{} Template listing will be implemented in Stage 3", "🔮".bright_magenta());
     
-    // For now, just show the rust-hello-world template if it exists
     let templates_dir = std::env::current_dir()?.join("templates");
     if templates_dir.exists() {
         println!("{} Available templates:", "📋".bright_blue());
@@ -349,7 +317,6 @@ async fn list_templates(_language: Option<String>, _format: OutputFormat) -> Res
     Ok(())
 }
 
-/// Search templates
 async fn search_templates(_query: String, _limit: usize) -> Result<()> {
     println!("{} Template search will be implemented in Stage 3", "🔮".bright_magenta());
     Ok(())

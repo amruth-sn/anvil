@@ -1,0 +1,40 @@
+name: "rust-hello-world"
+description: "A simple Rust Hello World project"
+version: "1.0.0"
+min_anvil_version: "0.1.0"
+
+variables:
+  - name: "project_name"
+    type:
+      type: "string"
+      min_length: 1
+      max_length: 50
+    prompt: "Project name?"
+    required: true
+  
+  - name: "author_name"
+    type:
+      type: "string"
+    prompt: "Author name?"
+    required: false
+    default: "Anonymous"
+  
+  - name: "description"
+    type:
+      type: "string"
+    prompt: "Project description?"
+    required: false
+    default: "A Rust project"
+
+features:
+  - name: "cli"
+    description: "Add CLI argument parsing with clap"
+  
+  - name: "tests"
+    description: "Include unit tests"
+
+hooks:
+  post_generate:
+    - command: "cargo check"
+      working_dir: "."
+      condition: "always"
