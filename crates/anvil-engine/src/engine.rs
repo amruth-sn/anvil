@@ -169,12 +169,13 @@ impl TemplateEngine {
                 .map_err(|_| EngineError::invalid_config("Invalid template path"))?
                 .to_path_buf();
             
-            let output_path = if let Some(stem) = relative_path.file_stem() {
-                if relative_path.extension().and_then(|e| e.to_str()) == Some("tera") {
-                    relative_path.with_file_name(stem)
-                } else {
-                    relative_path.clone()
-                }
+            let output_path = if relative_path.extension().and_then(|e| e.to_str()) == Some("tera") {
+                // Remove .tera extension: package.json.tera -> package.json
+                let file_name = relative_path.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("")
+                    .trim_end_matches(".tera");
+                relative_path.with_file_name(file_name)
             } else {
                 relative_path.clone()
             };
@@ -234,11 +235,18 @@ impl TemplateEngine {
         composed: crate::composition::ComposedTemplate,
         context: &Context,
     ) -> EngineResult<ProcessedTemplate> {
-        let tera_context = context.to_tera_context();
+        let mut tera_context = context.to_tera_context();
+        
+        // Add merged dependencies to context for template rendering
+        tera_context.insert("merged_dependencies", &composed.merged_dependencies);
+        
+        // Add environment variables to context
+        tera_context.insert("environment_variables", &composed.environment_variables);
+        
         let mut processed_files = Vec::new();
         
         for composed_file in composed.files {
-            let processed_content = if composed_file.path.extension().and_then(|e| e.to_str()) == Some("tera") {
+            let processed_content = if composed_file.is_template {
                 self.tera.render_str(&composed_file.content, &tera_context)
                     .map_err(EngineError::ProcessingError)?
             } else {

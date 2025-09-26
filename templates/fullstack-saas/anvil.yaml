@@ -32,42 +32,14 @@ variables:
     default: "myapp.com"
     required: false
 
-# Service definitions for composition (temporarily disabled for debugging)
-# services:
-#   - name: "auth"
-#     category: "auth" 
-#     prompt: "Choose authentication provider:"
-#     options: ["clerk", "auth0", "supabase", "firebase", "none"]
-#     required: true
-#     default: "clerk"
-# 
-#   - name: "payments"
-#     category: "payments"
-#     prompt: "Choose payment provider:"
-#     options: ["stripe", "paddle", "lemonsqueezy", "none"]
-#     required: false
-#     default: "none"
-# 
-#   - name: "database" 
-#     category: "database"
-#     prompt: "Choose database:"
-#     options: ["neon", "planetscale", "supabase", "mongodb", "none"]
-#     required: true
-#     default: "neon"
-# 
-#   - name: "ai"
-#     category: "ai"
-#     prompt: "Choose AI provider:"
-#     options: ["openai", "claude", "replicate", "none"]
-#     required: false
-#     default: "none"
-# 
-#   - name: "deployment"
-#     category: "deployment" 
-#     prompt: "Choose deployment platform:"
-#     options: ["vercel", "railway", "render", "none"]
-#     required: false
-#     default: "vercel"
+# Service definitions for composition
+services:
+  - name: "auth"
+    category: "auth" 
+    prompt: "Choose authentication provider:"
+    options: ["clerk", "none"]
+    required: false
+    default: "none"
 
 features:
   - name: "typescript"

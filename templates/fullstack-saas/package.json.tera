@@ -24,7 +24,8 @@
     "clsx": "^2.0.0",
     "class-variance-authority": "^0.7.0",
     "lucide-react": "^0.294.0",
-    "@radix-ui/react-slot": "^1.0.2"
+    "@radix-ui/react-slot": "^1.0.2"{% if merged_dependencies.npm %}{% for dep in merged_dependencies.npm %},
+    "{{ dep }}": "^1.0.0"{% endfor %}{% endif %}
   },
   "devDependencies": {
     "eslint": "^8",

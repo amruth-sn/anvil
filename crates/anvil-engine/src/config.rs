@@ -117,7 +117,7 @@ pub struct ServiceDefinition {
     pub conflicts: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum ServiceCategory {
     Auth,
@@ -128,6 +128,54 @@ pub enum ServiceCategory {
     Monitoring,
     Email,
     Storage,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceConfig {
+    pub name: String,
+    pub description: String,
+    pub version: String,
+    pub category: String,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dependencies: Option<ServiceDependencies>,
+    
+    #[serde(default)]
+    pub environment_variables: Vec<EnvironmentVariable>,
+    
+    #[serde(default)]
+    pub files: Vec<ServiceFile>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceDependencies {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub npm: Option<Vec<String>>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cargo: Option<HashMap<String, String>>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub go: Option<Vec<String>>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub python: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnvironmentVariable {
+    pub name: String,
+    pub description: String,
+    #[serde(default)]
+    pub required: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceFile {
+    pub path: String,
+    pub description: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -398,5 +446,16 @@ features:
         assert!(variable.validate_value(&serde_yaml::Value::String("test".to_string())).is_ok());
         assert!(variable.validate_value(&serde_yaml::Value::String("".to_string())).is_err());
         assert!(variable.validate_value(&serde_yaml::Value::String("this_is_too_long".to_string())).is_err());
+    }
+}
+
+impl ServiceConfig {
+    pub async fn from_file(path: &std::path::Path) -> EngineResult<Self> {
+        let content = tokio::fs::read_to_string(path)
+            .await
+            .map_err(|e| EngineError::file_error(path, e))?;
+        
+        let config: ServiceConfig = serde_yaml::from_str(&content)?;
+        Ok(config)
     }
 }

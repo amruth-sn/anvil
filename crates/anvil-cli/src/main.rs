@@ -6,7 +6,7 @@ use serde_yaml;
 
 use anvil_engine::{
     TemplateConfig, TemplateEngine, Context, FileGenerator,
-    CompositionEngine, ServiceSelection, ServiceCategory
+    CompositionEngine, ServiceSelection, ServiceCategory, ServiceDefinition
 };
 
 #[derive(Parser)]
@@ -246,7 +246,7 @@ async fn create_project(options: CreateOptions) -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Context validation failed: {}", e))?;
     
     // Check if services are specified to use composition
-    let services = collect_service_selections(&options)?;
+    let services = collect_service_selections_interactive(&template_config, &options).await?;
     
     let processed_template = if !services.is_empty() {
         println!("{} Using template composition with {} services...", "⚙️".bright_blue(), services.len());
@@ -445,6 +445,97 @@ fn collect_service_selections(options: &CreateOptions) -> Result<Vec<ServiceSele
     }
     
     Ok(services)
+}
+
+async fn collect_service_selections_interactive(
+    template_config: &TemplateConfig,
+    options: &CreateOptions,
+) -> Result<Vec<ServiceSelection>> {
+    let mut services = Vec::new();
+    
+    // If no-input flag is set, use defaults or CLI flags only
+    if options.no_input {
+        return collect_service_selections(options);
+    }
+    
+    // Set up composition engine for service discovery
+    let templates_dir = find_templates_directory()?;
+    let shared_dir = templates_dir.join("shared");
+    let composition_engine = CompositionEngine::new(templates_dir, shared_dir);
+    
+    println!("\n{} Service Configuration", "🔧".bright_blue());
+    println!("Configure services for your project (press Enter for default):\n");
+    
+    // Prompt for each service defined in the template
+    for service_def in &template_config.services {
+        let service_name = prompt_for_service_dynamic(service_def, options, &composition_engine).await?;
+        
+        if service_name != "none" {
+            let category = service_def.category.clone();
+            services.push(ServiceSelection {
+                category,
+                provider: service_name,
+                config: std::collections::HashMap::new(),
+            });
+        }
+    }
+    
+    if services.is_empty() {
+        println!("{} No services selected - creating basic template", "ℹ️".bright_cyan());
+    } else {
+        println!("{} Selected {} services", "✅".bright_green(), services.len());
+    }
+    
+    Ok(services)
+}
+
+
+async fn prompt_for_service_dynamic(
+    service_def: &ServiceDefinition, 
+    options: &CreateOptions,
+    composition_engine: &CompositionEngine,
+) -> Result<String> {
+    // Check if service was provided via CLI flag
+    let cli_value = match service_def.category {
+        ServiceCategory::Auth => options.auth.as_ref(),
+        ServiceCategory::Payments => options.payments.as_ref(),
+        ServiceCategory::Database => options.database.as_ref(),
+        ServiceCategory::AI => options.ai.as_ref(),
+        ServiceCategory::Deployment => options.deployment.as_ref(),
+        _ => None,
+    };
+    
+    if let Some(value) = cli_value {
+        return Ok(value.clone());
+    }
+    
+    // Discover available providers for this service category
+    let available_providers = composition_engine
+        .discover_service_providers(service_def.category.clone())
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to discover service providers: {}", e))?;
+    
+    // Use discovered providers instead of template-defined options
+    let options_to_use = if available_providers.len() > 1 {
+        available_providers
+    } else {
+        // Fallback to template-defined options if discovery fails
+        service_def.options.clone()
+    };
+    
+    // Use inquire to prompt for selection
+    use inquire::Select;
+    
+    let default_index = options_to_use.iter()
+        .position(|opt| Some(opt) == service_def.default.as_ref())
+        .unwrap_or(0);
+    
+    let selection = Select::new(&service_def.prompt, options_to_use)
+        .with_starting_cursor(default_index)
+        .prompt()
+        .map_err(|e| anyhow::anyhow!("Failed to get user input: {}", e))?;
+    
+    Ok(selection)
 }
 
 async fn list_templates(_language: Option<String>, _format: OutputFormat) -> Result<()> {

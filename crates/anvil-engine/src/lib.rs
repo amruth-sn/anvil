@@ -6,7 +6,8 @@ pub mod generator;
 
 pub use config::{
     TemplateConfig, TemplateVariable, VariableType, ServiceDefinition, 
-    ServiceCategory, CompositionConfig, FileMergingStrategy, DependencyResolution, ConditionalFile
+    ServiceCategory, CompositionConfig, FileMergingStrategy, DependencyResolution, ConditionalFile,
+    ServiceConfig, ServiceDependencies, EnvironmentVariable, ServiceFile
 };
 pub use composition::{CompositionEngine, ServiceSelection, ComposedTemplate, ComposedFile, FileSource};
 pub use engine::{TemplateEngine, Context};
