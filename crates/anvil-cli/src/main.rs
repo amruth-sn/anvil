@@ -2,9 +2,11 @@ use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 use anyhow::Result;
 use colored::*;
+use serde_yaml;
 
 use anvil_engine::{
-    TemplateConfig, TemplateEngine, Context, FileGenerator
+    TemplateConfig, TemplateEngine, Context, FileGenerator,
+    CompositionEngine, ServiceSelection, ServiceCategory
 };
 
 #[derive(Parser)]
@@ -47,6 +49,22 @@ pub enum Commands {
         
         #[arg(long)]
         dry_run: bool,
+
+        // Service selection flags
+        #[arg(long)]
+        auth: Option<String>,
+        
+        #[arg(long)]
+        payments: Option<String>,
+        
+        #[arg(long)]
+        database: Option<String>,
+        
+        #[arg(long)]
+        ai: Option<String>,
+        
+        #[arg(long)]
+        deployment: Option<String>,
     },
     
     List {
@@ -89,7 +107,12 @@ async fn main() -> Result<()> {
             git, 
             github, 
             force,
-            dry_run 
+            dry_run,
+            auth,
+            payments,
+            database,
+            ai,
+            deployment,
         } => {
             create_project(CreateOptions {
                 name,
@@ -101,6 +124,11 @@ async fn main() -> Result<()> {
                 force,
                 dry_run,
                 verbose: cli.verbose,
+                auth,
+                payments,
+                database,
+                ai,
+                deployment,
             }).await?;
         }
         Commands::List { language, format } => {
@@ -125,6 +153,12 @@ struct CreateOptions {
     force: bool,
     dry_run: bool,
     verbose: bool,
+    // Service selections
+    auth: Option<String>,
+    payments: Option<String>,
+    database: Option<String>,
+    ai: Option<String>,
+    deployment: Option<String>,
 }
 
 async fn create_project(options: CreateOptions) -> Result<()> {
@@ -211,9 +245,36 @@ async fn create_project(options: CreateOptions) -> Result<()> {
     engine.validate_context(&context, &template_config)
         .map_err(|e| anyhow::anyhow!("Context validation failed: {}", e))?;
     
-    println!("{} Processing template files...", "⚙️".bright_blue());
-    let processed_template = engine.process_template(&template_dir, &context).await
-        .map_err(|e| anyhow::anyhow!("Template processing failed: {}", e))?;
+    // Check if services are specified to use composition
+    let services = collect_service_selections(&options)?;
+    
+    let processed_template = if !services.is_empty() {
+        println!("{} Using template composition with {} services...", "⚙️".bright_blue(), services.len());
+        
+        let templates_dir = find_templates_directory()?;
+        let shared_dir = templates_dir.join("shared");
+        
+        let composition_engine = CompositionEngine::new(templates_dir, shared_dir);
+        
+        if options.verbose {
+            println!("{} Composing template with {} services...", "🔧".bright_blue(), services.len());
+        }
+        
+        let composed = composition_engine.compose_template(&template_name, services).await
+            .map_err(|e| anyhow::anyhow!("Template composition failed: {}", e))?;
+        
+        if options.verbose {
+            println!("{} Composition complete, processing {} files...", "✅".bright_green(), composed.files.len());
+        }
+        
+        // Convert ComposedTemplate to ProcessedTemplate
+        engine.process_composed_template(composed, &context).await
+            .map_err(|e| anyhow::anyhow!("Template processing failed: {}", e))?
+    } else {
+        println!("{} Processing template files...", "⚙️".bright_blue());
+        engine.process_template(&template_dir, &context).await
+            .map_err(|e| anyhow::anyhow!("Template processing failed: {}", e))?
+    };
     
     let progress_callback = if !options.verbose {
         Some(Box::new(|current: usize, total: usize, _msg: &str| {
@@ -252,15 +313,62 @@ async fn create_project(options: CreateOptions) -> Result<()> {
     Ok(())
 }
 
-async fn build_context(_config: &TemplateConfig, options: &CreateOptions) -> Result<Context> {
-    let mut context = Context::builder()
-        .variable("project_name", options.name.clone())
-        .variable("author_name", "Test Author".to_string())
-        .variable("description", "A test Rust project".to_string())
-        .build();
+async fn build_context(config: &TemplateConfig, options: &CreateOptions) -> Result<Context> {
+    let mut context_builder = Context::builder()
+        .variable("project_name", options.name.clone());
     
-    context.add_feature("cli".to_string());
-    context.add_feature("tests".to_string());
+    // Add variables based on template configuration with default values
+    for variable in &config.variables {
+        // Don't override project_name if it's already set
+        if variable.name != "project_name" {
+            let value = match variable.default.as_ref() {
+                Some(default) => default.clone(),
+                None => {
+                    // Provide sensible defaults for template variables
+                    match variable.name.as_str() {
+                        "project_description" => serde_yaml::Value::String("A modern SaaS application".to_string()),
+                        "author_name" => serde_yaml::Value::String("".to_string()),
+                        "domain" => serde_yaml::Value::String("myapp.com".to_string()),
+                        _ => serde_yaml::Value::String("".to_string()),
+                    }
+                }
+            };
+            context_builder = context_builder.variable(variable.name.clone(), value);
+        }
+    }
+    
+    let mut context = context_builder.build();
+    
+    // Add available features from template
+    for feature in &config.features {
+        context.add_feature(feature.name.clone());
+    }
+    
+    // Add default services object for templates that expect it
+    context.add_variable("services".to_string(), serde_yaml::Value::Mapping({
+        let mut services = serde_yaml::Mapping::new();
+        services.insert(
+            serde_yaml::Value::String("auth".to_string()),
+            serde_yaml::Value::String("none".to_string())
+        );
+        services.insert(
+            serde_yaml::Value::String("payments".to_string()),
+            serde_yaml::Value::String("none".to_string())
+        );
+        services.insert(
+            serde_yaml::Value::String("database".to_string()),
+            serde_yaml::Value::String("none".to_string())
+        );
+        services.insert(
+            serde_yaml::Value::String("ai".to_string()),
+            serde_yaml::Value::String("none".to_string())
+        );
+        services.insert(
+            serde_yaml::Value::String("deployment".to_string()),
+            serde_yaml::Value::String("none".to_string())
+        );
+        services
+    }));
     
     if options.verbose {
         println!("{} Built context with {} variables and {} features", 
@@ -281,6 +389,62 @@ fn find_template_directory(template_name: &str) -> Result<PathBuf> {
     }
     
     Ok(template_dir)
+}
+
+fn find_templates_directory() -> Result<PathBuf> {
+    let templates_dir = std::env::current_dir()?.join("templates");
+    
+    if !templates_dir.exists() {
+        return Err(anyhow::anyhow!("Templates directory not found: {}", templates_dir.display()));
+    }
+    
+    Ok(templates_dir)
+}
+
+fn collect_service_selections(options: &CreateOptions) -> Result<Vec<ServiceSelection>> {
+    let mut services = Vec::new();
+    
+    if let Some(auth) = &options.auth {
+        services.push(ServiceSelection {
+            category: ServiceCategory::Auth,
+            provider: auth.clone(),
+            config: std::collections::HashMap::new(),
+        });
+    }
+    
+    if let Some(payments) = &options.payments {
+        services.push(ServiceSelection {
+            category: ServiceCategory::Payments,
+            provider: payments.clone(),
+            config: std::collections::HashMap::new(),
+        });
+    }
+    
+    if let Some(database) = &options.database {
+        services.push(ServiceSelection {
+            category: ServiceCategory::Database,
+            provider: database.clone(),
+            config: std::collections::HashMap::new(),
+        });
+    }
+    
+    if let Some(ai) = &options.ai {
+        services.push(ServiceSelection {
+            category: ServiceCategory::AI,
+            provider: ai.clone(),
+            config: std::collections::HashMap::new(),
+        });
+    }
+    
+    if let Some(deployment) = &options.deployment {
+        services.push(ServiceSelection {
+            category: ServiceCategory::Deployment,
+            provider: deployment.clone(),
+            config: std::collections::HashMap::new(),
+        });
+    }
+    
+    Ok(services)
 }
 
 async fn list_templates(_language: Option<String>, _format: OutputFormat) -> Result<()> {

@@ -225,6 +225,40 @@ impl TemplateEngine {
         })
     }
 
+    /*
+    Processes a ComposedTemplate (from composition engine) into a ProcessedTemplate
+    by rendering all template content with the given context.
+    */
+    pub async fn process_composed_template(
+        &mut self,
+        composed: crate::composition::ComposedTemplate,
+        context: &Context,
+    ) -> EngineResult<ProcessedTemplate> {
+        let tera_context = context.to_tera_context();
+        let mut processed_files = Vec::new();
+        
+        for composed_file in composed.files {
+            let processed_content = if composed_file.path.extension().and_then(|e| e.to_str()) == Some("tera") {
+                self.tera.render_str(&composed_file.content, &tera_context)
+                    .map_err(EngineError::ProcessingError)?
+            } else {
+                composed_file.content
+            };
+            
+            let executable = self.should_be_executable(&composed_file.path);
+            
+            processed_files.push(ProcessedFile {
+                output_path: composed_file.path,
+                content: processed_content,
+                executable,
+            });
+        }
+        
+        Ok(ProcessedTemplate {
+            files: processed_files,
+        })
+    }
+
     pub fn render_string(&mut self, template: &str, context: &Context) -> EngineResult<String> {
         let tera_context = context.to_tera_context();
         self.tera.render_str(template, &tera_context)

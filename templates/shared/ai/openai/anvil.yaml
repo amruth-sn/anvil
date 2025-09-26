@@ -1,0 +1,22 @@
+name: "openai-integration"
+description: "OpenAI API integration for chat and completions"
+version: "1.0.0"
+category: "ai"
+
+dependencies:
+  npm:
+    - "openai"
+    - "ai"
+
+environment_variables:
+  - name: "OPENAI_API_KEY"
+    description: "OpenAI API key"
+    required: true
+
+files:
+  - path: "app/api/chat/route.ts"
+    description: "OpenAI chat completion API route"
+  - path: "components/ai/chat.tsx"
+    description: "Chat interface component"
+  - path: "lib/openai.ts"
+    description: "OpenAI client configuration"

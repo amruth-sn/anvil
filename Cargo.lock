@@ -96,6 +96,8 @@ dependencies = [
  "env_logger",
  "indicatif",
  "inquire",
+ "serde_json",
+ "serde_yaml",
  "tokio",
 ]
 
@@ -108,6 +110,7 @@ dependencies = [
  "regex",
  "semver",
  "serde",
+ "serde_json",
  "serde_yaml",
  "tempfile",
  "tera",

@@ -1,0 +1,30 @@
+name: "stripe-payments"
+description: "Stripe payment processing integration"
+version: "1.0.0"
+category: "payments"
+
+dependencies:
+  npm:
+    - "stripe"
+    - "@stripe/stripe-js"
+
+environment_variables:
+  - name: "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY"
+    description: "Stripe publishable key"
+    required: true
+  - name: "STRIPE_SECRET_KEY"
+    description: "Stripe secret key"
+    required: true
+  - name: "STRIPE_WEBHOOK_SECRET"
+    description: "Stripe webhook secret"
+    required: true
+
+files:
+  - path: "app/api/checkout/route.ts"
+    description: "Create checkout session API route"
+  - path: "app/api/webhooks/stripe/route.ts"
+    description: "Stripe webhook handler"
+  - path: "components/payments/checkout-button.tsx"
+    description: "Checkout button component"
+  - path: "lib/stripe.ts"
+    description: "Stripe configuration and utilities"

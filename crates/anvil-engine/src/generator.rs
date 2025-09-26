@@ -122,8 +122,8 @@ impl FileGenerator {
             .await
             .map_err(|e| EngineError::file_error(path, e))?;
         
-        let mut permissions = metadata.permissions();
-        let mode = permissions.mode();
+        let permissions = metadata.permissions();
+        let _mode = permissions.mode();
         
         fs::set_permissions(path, permissions)
             .await

@@ -1,0 +1,78 @@
+# {{ project_name }}
+
+{{ project_description | default(value="A modern SaaS application built with Next.js 14 and TypeScript") }}
+
+## 🚀 Features
+
+- **Next.js 14** with App Router
+- **TypeScript** for type safety
+- **Tailwind CSS** for styling
+- **Authentication** ready
+- **Payment processing** integration
+- **Database** connections
+- **AI integration** capabilities
+- **Deployment** configurations
+
+## 🛠️ Getting Started
+
+1. Install dependencies:
+```bash
+npm install
+```
+
+2. Set up environment variables:
+```bash
+cp .env.example .env.local
+```
+
+3. Run the development server:
+```bash
+npm run dev
+```
+
+4. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## 📁 Project Structure
+
+```
+{{ project_name }}/
+├── app/                   # Next.js 14 App Router
+├── components/            # React components
+├── lib/                   # Utility functions
+├── public/               # Static assets
+└── ...
+```
+
+## 🔧 Configuration
+
+This project is configured with the following services:
+{% if services.auth != 'none' %}
+- **Authentication**: {{ services.auth }}
+{% endif %}
+{% if services.payments != 'none' %}
+- **Payments**: {{ services.payments }}
+{% endif %}
+{% if services.database != 'none' %}
+- **Database**: {{ services.database }}
+{% endif %}
+{% if services.ai != 'none' %}
+- **AI**: {{ services.ai }}
+{% endif %}
+{% if services.deployment != 'none' %}
+- **Deployment**: {{ services.deployment }}
+{% endif %}
+
+## 🚢 Deployment
+
+This project is optimized for deployment on:
+{% if services.deployment == 'vercel' %}
+- **Vercel** - Automatic deployments from Git
+{% elif services.deployment == 'railway' %}
+- **Railway** - Full-stack deployment platform
+{% elif services.deployment == 'render' %}
+- **Render** - Cloud application platform
+{% endif %}
+
+---
+
+Built with ❤️ using [Anvil](https://github.com/anvildev/anvil)

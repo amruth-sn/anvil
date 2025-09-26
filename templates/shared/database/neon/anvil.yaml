@@ -1,0 +1,23 @@
+name: "neon-database"
+description: "Neon PostgreSQL database integration"
+version: "1.0.0"
+category: "database"
+
+dependencies:
+  npm:
+    - "@neondatabase/serverless"
+    - "drizzle-orm"
+    - "drizzle-kit"
+
+environment_variables:
+  - name: "DATABASE_URL"
+    description: "Neon database connection string"
+    required: true
+
+files:
+  - path: "lib/db.ts"
+    description: "Database connection and configuration"
+  - path: "lib/schema.ts"
+    description: "Database schema definitions"
+  - path: "drizzle.config.ts"
+    description: "Drizzle ORM configuration"

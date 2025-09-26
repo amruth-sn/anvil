@@ -1,0 +1,41 @@
+{
+  "name": "{{ project_name }}",
+  "version": "0.1.0",
+  "description": "{{ project_description | default(value="A modern SaaS application") }}",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "14.0.4",
+    "react": "^18",
+    "react-dom": "^18",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "typescript": "^5",
+    "tailwindcss": "^3.3.0",
+    "autoprefixer": "^10.0.1",
+    "postcss": "^8",
+    "clsx": "^2.0.0",
+    "class-variance-authority": "^0.7.0",
+    "lucide-react": "^0.294.0",
+    "@radix-ui/react-slot": "^1.0.2"
+  },
+  "devDependencies": {
+    "eslint": "^8",
+    "eslint-config-next": "14.0.4",
+    "@tailwindcss/typography": "^0.5.10"
+  },
+  "keywords": [
+    "nextjs",
+    "typescript", 
+    "saas",
+    "tailwindcss"
+  ],
+  "author": "{{ author_name | default(value="") }}"
+}

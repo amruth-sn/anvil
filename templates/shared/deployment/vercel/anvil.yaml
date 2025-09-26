@@ -1,0 +1,10 @@
+name: "vercel-deployment"
+description: "Vercel deployment configuration"
+version: "1.0.0"
+category: "deployment"
+
+files:
+  - path: "vercel.json"
+    description: "Vercel deployment configuration"
+  - path: ".env.example"
+    description: "Environment variables template"

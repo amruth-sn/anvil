@@ -1,0 +1,24 @@
+[package]
+name = "{{ project_name }}"
+version = "0.1.0"
+edition = "2021"
+{% if author_name -%}
+authors = ["{{ author_name }}"]
+{%- endif %}
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1.35", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+anyhow = "1.0"
+uuid = { version = "1.6", features = ["v4", "serde"] }
+{% if services.database == "postgresql" -%}
+sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-rustls", "uuid"] }
+{%- elif services.database == "sqlite" -%}
+sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio-rustls"] }
+{%- endif %}

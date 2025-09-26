@@ -1,0 +1,26 @@
+name: "clerk-auth"
+description: "Clerk authentication integration"
+version: "1.0.0"
+category: "auth"
+
+dependencies:
+  npm:
+    - "@clerk/nextjs"
+
+environment_variables:
+  - name: "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"
+    description: "Clerk publishable key"
+    required: true
+  - name: "CLERK_SECRET_KEY"
+    description: "Clerk secret key"
+    required: true
+
+files:
+  - path: "middleware.ts"
+    description: "Clerk middleware for route protection"
+  - path: "app/sign-in/[[...sign-in]]/page.tsx"
+    description: "Sign in page component"
+  - path: "app/sign-up/[[...sign-up]]/page.tsx"
+    description: "Sign up page component"
+  - path: "components/auth/user-button.tsx"
+    description: "User profile button component"

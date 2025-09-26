@@ -1,0 +1,103 @@
+name: "fullstack-saas"
+description: "Complete SaaS application with Next.js 14, TypeScript, and service integrations"
+version: "1.0.0"
+min_anvil_version: "0.1.0"
+
+variables:
+  - name: "project_name"
+    type:
+      type: "string"
+      min_length: 1
+      max_length: 50
+    prompt: "Project name?"
+    required: true
+
+  - name: "project_description" 
+    type:
+      type: "string"
+    prompt: "Project description?"
+    default: "A modern SaaS application"
+    required: false
+
+  - name: "author_name"
+    type:
+      type: "string"
+    prompt: "Author name?"
+    required: false
+
+  - name: "domain"
+    type:
+      type: "string"
+    prompt: "Production domain (without https://)?"
+    default: "myapp.com"
+    required: false
+
+# Service definitions for composition (temporarily disabled for debugging)
+# services:
+#   - name: "auth"
+#     category: "auth" 
+#     prompt: "Choose authentication provider:"
+#     options: ["clerk", "auth0", "supabase", "firebase", "none"]
+#     required: true
+#     default: "clerk"
+# 
+#   - name: "payments"
+#     category: "payments"
+#     prompt: "Choose payment provider:"
+#     options: ["stripe", "paddle", "lemonsqueezy", "none"]
+#     required: false
+#     default: "none"
+# 
+#   - name: "database" 
+#     category: "database"
+#     prompt: "Choose database:"
+#     options: ["neon", "planetscale", "supabase", "mongodb", "none"]
+#     required: true
+#     default: "neon"
+# 
+#   - name: "ai"
+#     category: "ai"
+#     prompt: "Choose AI provider:"
+#     options: ["openai", "claude", "replicate", "none"]
+#     required: false
+#     default: "none"
+# 
+#   - name: "deployment"
+#     category: "deployment" 
+#     prompt: "Choose deployment platform:"
+#     options: ["vercel", "railway", "render", "none"]
+#     required: false
+#     default: "vercel"
+
+features:
+  - name: "typescript"
+    description: "TypeScript support"
+    dependencies: []
+
+  - name: "tailwind" 
+    description: "Tailwind CSS for styling"
+    dependencies: []
+
+  - name: "app_router"
+    description: "Next.js 14 App Router"
+    dependencies: []
+
+# Template composition configuration (temporarily disabled for debugging)
+# composition:
+#   file_merging_strategy: "merge"
+#   dependency_resolution: "auto"
+#   conditional_files:
+#     - path: "middleware.ts"
+#       condition: "services.auth in ['clerk', 'auth0']"
+#     - path: "app/api/checkout/route.ts"
+#       condition: "services.payments != 'none'"
+#     - path: "app/api/webhooks/stripe/route.ts"
+#       condition: "services.payments == 'stripe'"
+#     - path: "app/api/chat/route.ts"
+#       condition: "services.ai != 'none'"
+
+hooks:
+  post_generate:
+    - command: "npm install"
+      working_dir: "."
+      condition: "always"

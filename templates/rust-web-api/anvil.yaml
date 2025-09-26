@@ -1,0 +1,46 @@
+name: "rust-web-api"
+description: "Rust web API with Axum framework"
+version: "1.0.0"
+min_anvil_version: "0.1.0"
+
+variables:
+  - name: "project_name"
+    type: "string"
+    prompt: "Project name?"
+    required: true
+    min_length: 1
+
+  - name: "author_name"
+    type: "string"
+    prompt: "Author name?"
+    required: false
+
+services:
+  - name: "database"
+    category: "database"
+    prompt: "Choose database:"
+    options: ["postgresql", "sqlite", "none"]
+    required: false
+    default: "postgresql"
+
+  - name: "deployment"
+    category: "deployment"
+    prompt: "Choose deployment:"
+    options: ["docker", "railway", "none"]
+    required: false
+    default: "docker"
+
+features:
+  - name: "cors"
+    description: "CORS middleware support"
+  
+  - name: "logging"
+    description: "Structured logging with tracing"
+
+  - name: "validation"
+    description: "Request validation"
+
+hooks:
+  post_generate:
+    - command: "cargo check"
+      working_dir: "."

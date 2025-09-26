@@ -1,0 +1,89 @@
+use axum::{
+    extract::State,
+    http::StatusCode,
+    response::Json,
+    routing::{get, post},
+    Router,
+};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+#[derive(Clone)]
+struct AppState {
+    // Add your application state here
+}
+
+#[derive(Serialize)]
+struct HealthResponse {
+    status: String,
+    service: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ApiResponse<T> {
+    success: bool,
+    data: Option<T>,
+    message: Option<String>,
+}
+
+impl<T> ApiResponse<T> {
+    fn success(data: T) -> Self {
+        Self {
+            success: true,
+            data: Some(data),
+            message: None,
+        }
+    }
+    
+    fn error(message: impl Into<String>) -> Self {
+        Self {
+            success: false,
+            data: None,
+            message: Some(message.into()),
+        }
+    }
+}
+
+async fn health() -> Result<Json<ApiResponse<HealthResponse>>, StatusCode> {
+    let response = HealthResponse {
+        status: "healthy".to_string(),
+        service: "{{ project_name }}".to_string(),
+    };
+    
+    Ok(Json(ApiResponse::success(response)))
+}
+
+async fn root() -> Json<ApiResponse<String>> {
+    Json(ApiResponse::success("Welcome to {{ project_name }} API".to_string()))
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Initialize tracing
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "{{ project_name }}=debug,tower_http=debug".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    let state = AppState {};
+
+    let app = Router::new()
+        .route("/", get(root))
+        .route("/health", get(health))
+        .layer(TraceLayer::new_for_http())
+        .layer(CorsLayer::permissive())
+        .with_state(Arc::new(state));
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
+    
+    tracing::info!("{{ project_name }} API listening on http://0.0.0.0:3000");
+    
+    axum::serve(listener, app).await?;
+
+    Ok(())
+}

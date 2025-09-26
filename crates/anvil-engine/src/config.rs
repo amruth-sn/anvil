@@ -20,6 +20,13 @@ pub struct TemplateConfig {
     
     #[serde(default = "default_min_anvil_version")]
     pub min_anvil_version: String,
+    
+    // Service composition support
+    #[serde(default)]
+    pub services: Vec<ServiceDefinition>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub composition: Option<CompositionConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,6 +60,17 @@ pub enum VariableType {
     },
 }
 
+impl VariableType {
+    pub fn type_name(&self) -> String {
+        match self {
+            VariableType::String { .. } => "string".to_string(),
+            VariableType::Boolean => "boolean".to_string(),
+            VariableType::Choice { .. } => "choice".to_string(),
+            VariableType::Number { .. } => "number".to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Feature {
     pub name: String,
@@ -80,6 +98,71 @@ pub struct HookCommand {
     pub condition: Option<String>,
     #[serde(default)]
     pub env: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ServiceDefinition {
+    pub name: String,
+    pub category: ServiceCategory,
+    pub prompt: String,
+    pub options: Vec<String>,
+    #[serde(default)]
+    pub required: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dependencies: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conflicts: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ServiceCategory {
+    Auth,
+    Payments,
+    Database,
+    AI,
+    Deployment,
+    Monitoring,
+    Email,
+    Storage,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompositionConfig {
+    #[serde(default)]
+    pub file_merging_strategy: FileMergingStrategy,
+    #[serde(default)]
+    pub dependency_resolution: DependencyResolution,
+    #[serde(default)]
+    pub conditional_files: Vec<ConditionalFile>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FileMergingStrategy {
+    Append,
+    Merge,
+    Override,
+    Skip,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DependencyResolution {
+    Auto,
+    Manual,
+    Strict,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConditionalFile {
+    pub path: String,
+    pub condition: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_service: Option<String>,
 }
 
 impl TemplateConfig {
@@ -232,6 +315,18 @@ impl Feature {
 
 fn default_min_anvil_version() -> String {
     "0.1.0".to_string()
+}
+
+impl Default for FileMergingStrategy {
+    fn default() -> Self {
+        FileMergingStrategy::Merge
+    }
+}
+
+impl Default for DependencyResolution {
+    fn default() -> Self {
+        DependencyResolution::Auto
+    }
 }
 
 #[cfg(test)]

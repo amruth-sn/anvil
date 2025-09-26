@@ -1,0 +1,42 @@
+name: "go-cli-tool"
+description: "Go CLI application with Cobra framework"
+version: "1.0.0"
+min_anvil_version: "0.1.0"
+
+variables:
+  - name: "project_name"
+    type: "string"
+    prompt: "Project name?"
+    required: true
+    min_length: 1
+
+  - name: "author_name"
+    type: "string"
+    prompt: "Author name?"
+    required: false
+
+  - name: "description"
+    type: "string"
+    prompt: "Project description?"
+    default: "A CLI application built with Go"
+    required: false
+
+services:
+  - name: "database"
+    category: "database"
+    prompt: "Choose database:"
+    options: ["sqlite", "postgresql", "none"]
+    required: false
+    default: "none"
+
+features:
+  - name: "config"
+    description: "Configuration file support"
+  
+  - name: "logging"
+    description: "Structured logging"
+
+hooks:
+  post_generate:
+    - command: "go mod tidy"
+      working_dir: "."

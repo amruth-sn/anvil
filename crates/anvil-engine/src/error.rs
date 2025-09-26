@@ -27,6 +27,9 @@ pub enum EngineError {
 
     #[error("Feature dependency not met: {feature} requires {dependency}")]
     FeatureDependencyError { feature: String, dependency: String },
+
+    #[error("Template composition failed: {reason}")]
+    CompositionError { reason: String },
 }
 
 pub type EngineResult<T> = Result<T, EngineError>;
@@ -59,5 +62,9 @@ impl EngineError {
             feature: feature.into(),
             dependency: dependency.into(),
         }
+    }
+
+    pub fn composition_error(reason: impl Into<String>) -> Self {
+        Self::CompositionError { reason: reason.into() }
     }
 }

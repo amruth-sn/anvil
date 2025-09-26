@@ -1,0 +1,632 @@
+/*
+Module for template composition engine that combines base templates with service components.
+Handles file merging, conflict resolution, and conditional inclusion logic.
+*/
+
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use serde_json::Value;
+use tokio::fs;
+
+use crate::config::{TemplateConfig, ServiceCategory, CompositionConfig, FileMergingStrategy};
+use crate::error::{EngineError, EngineResult};
+
+#[derive(Debug, Clone)]
+pub struct CompositionEngine {
+    base_template_path: PathBuf,
+    shared_services_path: PathBuf,
+}
+
+#[derive(Debug, Clone)]
+pub struct ServiceSelection {
+    pub category: ServiceCategory,
+    pub provider: String,
+    pub config: HashMap<String, Value>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ComposedTemplate {
+    pub base_config: TemplateConfig,
+    pub files: Vec<ComposedFile>,
+    pub merged_dependencies: HashMap<String, Value>,
+    pub environment_variables: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ComposedFile {
+    pub path: PathBuf,
+    pub content: String,
+    pub source: FileSource,
+    pub merge_strategy: FileMergingStrategy,
+}
+
+#[derive(Debug, Clone)]
+pub enum FileSource {
+    BaseTemplate,
+    Service { category: ServiceCategory, provider: String },
+    Merged,
+}
+
+impl CompositionEngine {
+    pub fn new(base_template_path: PathBuf, shared_services_path: PathBuf) -> Self {
+        Self {
+            base_template_path,
+            shared_services_path,
+        }
+    }
+
+    /*
+    Composes a base template with selected services.
+    Returns a ComposedTemplate containing all files and configurations.
+    */
+    pub async fn compose_template(
+        &self,
+        template_name: &str,
+        services: Vec<ServiceSelection>,
+    ) -> EngineResult<ComposedTemplate> {
+        // Load base template configuration
+        let base_config_path = self.base_template_path.join(template_name).join("anvil.yaml");
+        let base_config = TemplateConfig::from_file(&base_config_path).await?;
+
+        // Validate service selections
+        self.validate_service_selections(&base_config, &services)?;
+
+        // Collect all files from base template
+        let mut composed_files = self.collect_base_template_files(template_name).await?;
+
+        // Add service-specific files
+        for service in &services {
+            let service_files = self.collect_service_files(&service).await?;
+            composed_files.extend(service_files);
+        }
+
+        // Apply conditional file inclusion
+        let filtered_files = self.apply_conditional_inclusion(composed_files, &services, &base_config.composition).await?;
+
+        // Handle file conflicts and merging
+        let resolved_files = self.resolve_file_conflicts(filtered_files, &base_config.composition).await?;
+
+        // Merge dependencies (package.json, Cargo.toml, etc.)
+        let merged_dependencies = self.merge_dependencies(&services).await?;
+
+        // Collect environment variables
+        let environment_variables = self.collect_environment_variables(&services).await?;
+
+        Ok(ComposedTemplate {
+            base_config,
+            files: resolved_files,
+            merged_dependencies,
+            environment_variables,
+        })
+    }
+
+    /*
+    Validates that selected services are compatible with the base template
+    and with each other. Checks dependencies and conflicts.
+    */
+    fn validate_service_selections(
+        &self,
+        base_config: &TemplateConfig,
+        services: &[ServiceSelection],
+    ) -> EngineResult<()> {
+        // Check that required services are provided
+        for service_def in &base_config.services {
+            if service_def.required {
+                let has_service = services.iter().any(|s| s.category == service_def.category);
+                if !has_service {
+                    return Err(EngineError::composition_error(format!(
+                        "Required service '{}' not provided", service_def.name
+                    )));
+                }
+            }
+        }
+
+        // Check for conflicting services
+        for service in services {
+            if let Some(service_def) = base_config.services.iter().find(|s| s.category == service.category) {
+                if let Some(conflicts) = &service_def.conflicts {
+                    for conflict in conflicts {
+                        if services.iter().any(|s| format!("{:?}", s.category).to_lowercase() == *conflict) {
+                            return Err(EngineError::composition_error(format!(
+                                "Service conflict: {} conflicts with {}", 
+                                service_def.name, conflict
+                            )));
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /*
+    Collects all files from the base template directory.
+    */
+    async fn collect_base_template_files(&self, template_name: &str) -> EngineResult<Vec<ComposedFile>> {
+        let template_path = self.base_template_path.join(template_name);
+        let mut files = Vec::new();
+
+        self.collect_files_recursive(&template_path, &template_path, FileSource::BaseTemplate, &mut files).await?;
+
+        Ok(files)
+    }
+
+    /*
+    Collects files for a specific service selection.
+    */
+    async fn collect_service_files(&self, service: &ServiceSelection) -> EngineResult<Vec<ComposedFile>> {
+        let service_path = self.shared_services_path
+            .join(format!("{:?}", service.category).to_lowercase())
+            .join(&service.provider);
+
+        if !service_path.exists() {
+            return Err(EngineError::composition_error(format!(
+                "Service files not found: {:?}/{}", service.category, service.provider
+            )));
+        }
+
+        let mut files = Vec::new();
+        let source = FileSource::Service {
+            category: service.category.clone(),
+            provider: service.provider.clone(),
+        };
+
+        self.collect_files_recursive(&service_path, &service_path, source, &mut files).await?;
+
+        Ok(files)
+    }
+
+    /*
+    Recursively collects files from a directory, preserving relative paths.
+    */
+    fn collect_files_recursive<'a>(
+        &'a self,
+        dir: &'a Path,
+        base_path: &'a Path,
+        source: FileSource,
+        files: &'a mut Vec<ComposedFile>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = EngineResult<()>> + Send + 'a>> {
+        Box::pin(async move {
+        let mut entries = fs::read_dir(dir).await.map_err(|e| {
+            EngineError::file_error(dir, e)
+        })?;
+
+        while let Some(entry) = entries.next_entry().await.map_err(|e| {
+            EngineError::file_error(dir, e)
+        })? {
+            let path = entry.path();
+            
+            if path.is_dir() {
+                self.collect_files_recursive(&path, base_path, source.clone(), files).await?;
+            } else if path.is_file() {
+                // Skip anvil.yaml config files in service directories
+                if path.file_name().and_then(|name| name.to_str()) == Some("anvil.yaml") {
+                    continue;
+                }
+
+                let relative_path = path.strip_prefix(base_path).map_err(|_| {
+                    EngineError::composition_error(format!("Invalid path structure: {}", path.display()))
+                })?;
+
+                let content = fs::read_to_string(&path).await.map_err(|e| {
+                    EngineError::file_error(&path, e)
+                })?;
+
+                files.push(ComposedFile {
+                    path: relative_path.to_path_buf(),
+                    content,
+                    source: source.clone(),
+                    merge_strategy: FileMergingStrategy::default(),
+                });
+            }
+        }
+
+        Ok(())
+        })
+    }
+
+    /*
+    Resolves file conflicts when multiple sources provide the same file.
+    Applies merging strategies based on composition configuration.
+    */
+    async fn resolve_file_conflicts(
+        &self,
+        files: Vec<ComposedFile>,
+        composition_config: &Option<CompositionConfig>,
+    ) -> EngineResult<Vec<ComposedFile>> {
+        let mut file_map: HashMap<PathBuf, Vec<ComposedFile>> = HashMap::new();
+
+        // Group files by path
+        for file in files {
+            file_map.entry(file.path.clone()).or_insert_with(Vec::new).push(file);
+        }
+
+        let mut resolved_files = Vec::new();
+
+        for (path, conflicting_files) in file_map {
+            if conflicting_files.len() == 1 {
+                // No conflict, take the single file
+                resolved_files.push(conflicting_files.into_iter().next().unwrap());
+            } else {
+                // Handle conflict based on strategy
+                let default_strategy = FileMergingStrategy::default();
+                let strategy = composition_config
+                    .as_ref()
+                    .map(|c| &c.file_merging_strategy)
+                    .unwrap_or(&default_strategy);
+
+                let resolved = self.resolve_single_conflict(path, conflicting_files, strategy).await?;
+                resolved_files.push(resolved);
+            }
+        }
+
+        Ok(resolved_files)
+    }
+
+    /*
+    Resolves a single file conflict using the specified merging strategy.
+    */
+    async fn resolve_single_conflict(
+        &self,
+        path: PathBuf,
+        mut files: Vec<ComposedFile>,
+        strategy: &FileMergingStrategy,
+    ) -> EngineResult<ComposedFile> {
+        match strategy {
+            FileMergingStrategy::Override => {
+                // Service files override base template files
+                files.sort_by(|a, b| {
+                    match (&a.source, &b.source) {
+                        (FileSource::BaseTemplate, FileSource::Service { .. }) => std::cmp::Ordering::Less,
+                        (FileSource::Service { .. }, FileSource::BaseTemplate) => std::cmp::Ordering::Greater,
+                        _ => std::cmp::Ordering::Equal,
+                    }
+                });
+                Ok(files.into_iter().last().unwrap())
+            }
+            FileMergingStrategy::Append => {
+                // Append all file contents
+                let mut combined_content = String::new();
+                for file in &files {
+                    combined_content.push_str(&file.content);
+                    combined_content.push('\n');
+                }
+                Ok(ComposedFile {
+                    path,
+                    content: combined_content,
+                    source: FileSource::Merged,
+                    merge_strategy: FileMergingStrategy::Append,
+                })
+            }
+            FileMergingStrategy::Merge => {
+                // Intelligent merging based on file type
+                if path.extension().and_then(|ext| ext.to_str()) == Some("json") {
+                    self.merge_json_files(path, files).await
+                } else {
+                    // Default to append for non-JSON files
+                    let mut combined_content = String::new();
+                    for file in &files {
+                        combined_content.push_str(&file.content);
+                        combined_content.push('\n');
+                    }
+                    Ok(ComposedFile {
+                        path,
+                        content: combined_content,
+                        source: FileSource::Merged,
+                        merge_strategy: FileMergingStrategy::Append,
+                    })
+                }
+            }
+            FileMergingStrategy::Skip => {
+                // Skip conflicting files, take the first one
+                Ok(files.into_iter().next().unwrap())
+            }
+        }
+    }
+
+    /*
+    Merges JSON files by combining their objects.
+    Handles package.json dependency merging specifically.
+    */
+    async fn merge_json_files(
+        &self,
+        path: PathBuf,
+        files: Vec<ComposedFile>,
+    ) -> EngineResult<ComposedFile> {
+        let mut merged_json = serde_json::Map::new();
+
+        for file in &files {
+            let json: serde_json::Value = serde_json::from_str(&file.content)
+                .map_err(|e| EngineError::composition_error(format!("Invalid JSON in {}: {}", path.display(), e)))?;
+
+            if let serde_json::Value::Object(obj) = json {
+                for (key, value) in obj {
+                    match merged_json.get(&key) {
+                        Some(existing) => {
+                            // Merge dependencies and devDependencies
+                            if (key == "dependencies" || key == "devDependencies") &&
+                               existing.is_object() && value.is_object() {
+                                let mut merged_deps = existing.as_object().unwrap().clone();
+                                merged_deps.extend(value.as_object().unwrap().clone());
+                                merged_json.insert(key, serde_json::Value::Object(merged_deps));
+                            } else {
+                                // Override for other fields
+                                merged_json.insert(key, value);
+                            }
+                        }
+                        None => {
+                            merged_json.insert(key, value);
+                        }
+                    }
+                }
+            }
+        }
+
+        let merged_content = serde_json::to_string_pretty(&merged_json)
+            .map_err(|e| EngineError::composition_error(format!("Failed to serialize merged JSON: {}", e)))?;
+
+        Ok(ComposedFile {
+            path,
+            content: merged_content,
+            source: FileSource::Merged,
+            merge_strategy: FileMergingStrategy::Merge,
+        })
+    }
+
+    /*
+    Merges dependencies from all selected services.
+    Returns a map of dependency files to their merged content.
+    */
+    async fn merge_dependencies(&self, _services: &[ServiceSelection]) -> EngineResult<HashMap<String, Value>> {
+        // TODO: Implement dependency merging for different package managers
+        // This will handle package.json, Cargo.toml, go.mod, etc.
+        Ok(HashMap::new())
+    }
+
+    /*
+    Applies conditional file inclusion based on service selections and conditions.
+    Filters out files that don't meet their inclusion conditions.
+    */
+    async fn apply_conditional_inclusion(
+        &self,
+        files: Vec<ComposedFile>,
+        services: &[ServiceSelection],
+        composition_config: &Option<CompositionConfig>,
+    ) -> EngineResult<Vec<ComposedFile>> {
+        let mut filtered_files = Vec::new();
+
+        // Create context for condition evaluation
+        let mut context = HashMap::new();
+        
+        // Add service selections to context
+        for service in services {
+            let category_key = format!("{:?}", service.category).to_lowercase();
+            context.insert(category_key, service.provider.clone());
+            context.insert(format!("has_{}", format!("{:?}", service.category).to_lowercase()), "true".to_string());
+        }
+
+        for file in files {
+            let should_include = self.evaluate_file_conditions(&file, &context, composition_config).await?;
+            
+            if should_include {
+                filtered_files.push(file);
+            }
+        }
+
+        Ok(filtered_files)
+    }
+
+    /*
+    Evaluates whether a file should be included based on its conditions.
+    */
+    async fn evaluate_file_conditions(
+        &self,
+        file: &ComposedFile,
+        context: &HashMap<String, String>,
+        composition_config: &Option<CompositionConfig>,
+    ) -> EngineResult<bool> {
+        // Check global conditional files configuration
+        if let Some(config) = composition_config {
+            for conditional_file in &config.conditional_files {
+                if file.path == PathBuf::from(&conditional_file.path) {
+                    return self.evaluate_condition(&conditional_file.condition, context).await;
+                }
+            }
+        }
+
+        // Check file-specific conditions based on naming patterns
+        self.evaluate_implicit_conditions(file, context).await
+    }
+
+    /*
+    Evaluates a condition string against the current context.
+    Supports basic conditions like:
+    - "services.auth == 'clerk'"
+    - "services.payments in ['stripe', 'paddle']" 
+    - "has_auth && has_payments"
+    */
+    async fn evaluate_condition(
+        &self,
+        condition: &str,
+        context: &HashMap<String, String>,
+    ) -> EngineResult<bool> {
+        let condition = condition.trim();
+
+        // Handle AND conditions: "has_auth && has_payments"
+        if condition.contains("&&") {
+            let parts: Vec<&str> = condition.split("&&").collect();
+            for part in parts {
+                let result = self.evaluate_simple_condition(part.trim(), context)?;
+                if !result {
+                    return Ok(false);
+                }
+            }
+            return Ok(true);
+        }
+
+        // Handle OR conditions: "has_auth || has_payments"
+        if condition.contains("||") {
+            let parts: Vec<&str> = condition.split("||").collect();
+            for part in parts {
+                let result = self.evaluate_simple_condition(part.trim(), context)?;
+                if result {
+                    return Ok(true);
+                }
+            }
+            return Ok(false);
+        }
+
+        // Fallback to simple condition evaluation
+        self.evaluate_simple_condition(condition, context)
+    }
+
+    /*
+    Evaluates simple conditions without recursion.
+    Handles basic equality, membership, and boolean conditions.
+    */
+    fn evaluate_simple_condition(
+        &self,
+        condition: &str,
+        context: &HashMap<String, String>,
+    ) -> EngineResult<bool> {
+        let condition = condition.trim();
+
+        // Handle equality conditions: "services.auth == 'clerk'"
+        if condition.contains("==") {
+            let parts: Vec<&str> = condition.split("==").collect();
+            if parts.len() == 2 {
+                let left = parts[0].trim();
+                let right = parts[1].trim().trim_matches('\'').trim_matches('"');
+                
+                if left.starts_with("services.") {
+                    let service_type = left.strip_prefix("services.").unwrap();
+                    return Ok(context.get(service_type).map_or(false, |v| v == right));
+                }
+            }
+        }
+
+        // Handle 'in' conditions: "services.payments in ['stripe', 'paddle']"
+        if condition.contains(" in ") {
+            let parts: Vec<&str> = condition.split(" in ").collect();
+            if parts.len() == 2 {
+                let left = parts[0].trim();
+                let right = parts[1].trim();
+                
+                if left.starts_with("services.") && right.starts_with('[') && right.ends_with(']') {
+                    let service_type = left.strip_prefix("services.").unwrap();
+                    let options: Vec<&str> = right[1..right.len()-1]
+                        .split(',')
+                        .map(|s| s.trim().trim_matches('\'').trim_matches('"'))
+                        .collect();
+                    
+                    return Ok(context.get(service_type).map_or(false, |v| options.contains(&v.as_str())));
+                }
+            }
+        }
+
+        // Handle boolean conditions: "has_auth"
+        if condition.starts_with("has_") {
+            return Ok(context.get(condition).map_or(false, |v| v == "true"));
+        }
+
+        // Default: include file if condition is not recognized
+        Ok(true)
+    }
+
+    /*
+    Evaluates implicit conditions based on file paths and service selections.
+    For example, files in auth/clerk/ are only included if clerk auth is selected.
+    */
+    async fn evaluate_implicit_conditions(
+        &self,
+        file: &ComposedFile,
+        context: &HashMap<String, String>,
+    ) -> EngineResult<bool> {
+        match &file.source {
+            FileSource::BaseTemplate => {
+                // Base template files are always included
+                Ok(true)
+            }
+            FileSource::Service { category, provider } => {
+                // Service files are included if the service is selected
+                let category_key = format!("{:?}", category).to_lowercase();
+                Ok(context.get(&category_key).map_or(false, |selected| selected == provider))
+            }
+            FileSource::Merged => {
+                // Merged files are always included
+                Ok(true)
+            }
+        }
+    }
+
+    /*
+    Collects environment variables required by all selected services.
+    */
+    async fn collect_environment_variables(&self, _services: &[ServiceSelection]) -> EngineResult<HashMap<String, String>> {
+        // TODO: Implement environment variable collection from service configs
+        Ok(HashMap::new())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+    use tokio::fs;
+
+    async fn create_test_structure() -> TempDir {
+        let temp_dir = TempDir::new().unwrap();
+        let base_path = temp_dir.path();
+
+        // Create base template
+        fs::create_dir_all(base_path.join("templates/test-app")).await.unwrap();
+        fs::write(
+            base_path.join("templates/test-app/anvil.yaml"),
+            r#"
+name: "test-app"
+description: "Test application"
+version: "1.0.0"
+services:
+  - name: "auth"
+    category: "auth"
+    prompt: "Choose auth provider"
+    options: ["clerk", "auth0"]
+    required: true
+"#,
+        ).await.unwrap();
+
+        // Create shared services
+        fs::create_dir_all(base_path.join("templates/shared/auth/clerk")).await.unwrap();
+        fs::write(
+            base_path.join("templates/shared/auth/clerk/middleware.ts"),
+            "// Clerk middleware",
+        ).await.unwrap();
+
+        temp_dir
+    }
+
+    #[tokio::test]
+    async fn test_compose_template() {
+        let temp_dir = create_test_structure().await;
+        let base_path = temp_dir.path();
+
+        let engine = CompositionEngine::new(
+            base_path.join("templates"),
+            base_path.join("templates/shared"),
+        );
+
+        let services = vec![ServiceSelection {
+            category: ServiceCategory::Auth,
+            provider: "clerk".to_string(),
+            config: HashMap::new(),
+        }];
+
+        let result = engine.compose_template("test-app", services).await;
+        assert!(result.is_ok());
+
+        let composed = result.unwrap();
+        assert_eq!(composed.base_config.name, "test-app");
+        assert!(!composed.files.is_empty());
+    }
+}
