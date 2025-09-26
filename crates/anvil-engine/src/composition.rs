@@ -6,6 +6,7 @@ Handles file merging, conflict resolution, and conditional inclusion logic.
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use serde_json::Value;
+use serde::Serialize;
 use tokio::fs;
 
 use crate::config::{TemplateConfig, ServiceCategory, CompositionConfig, FileMergingStrategy};
@@ -30,6 +31,7 @@ pub struct ComposedTemplate {
     pub files: Vec<ComposedFile>,
     pub merged_dependencies: HashMap<String, Value>,
     pub environment_variables: HashMap<String, String>,
+    pub service_context: ServiceContext,
 }
 
 #[derive(Debug, Clone)]
@@ -46,6 +48,19 @@ pub enum FileSource {
     BaseTemplate,
     Service { category: ServiceCategory, provider: String },
     Merged,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ServiceContext {
+    pub services: HashMap<String, ServiceInfo>,
+    pub shared_config: HashMap<String, Value>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ServiceInfo {
+    pub provider: String,
+    pub config: HashMap<String, Value>,
+    pub exports: HashMap<String, Value>,
 }
 
 impl CompositionEngine {
@@ -132,6 +147,9 @@ impl CompositionEngine {
         // Validate service selections
         self.validate_service_selections(&base_config, &services)?;
 
+        // Build service dependency injection context
+        let service_context = self.build_service_context(&services).await?;
+
         // Collect all files from base template
         let mut composed_files = self.collect_base_template_files(template_name).await?;
 
@@ -158,6 +176,7 @@ impl CompositionEngine {
             files: resolved_files,
             merged_dependencies,
             environment_variables,
+            service_context,
         })
     }
 
@@ -250,6 +269,100 @@ impl CompositionEngine {
         }
 
         Ok(())
+    }
+
+    /*
+    Builds service dependency injection context by loading service configurations
+    and creating a shared context for cross-service communication.
+    */
+    async fn build_service_context(&self, services: &[ServiceSelection]) -> EngineResult<ServiceContext> {
+        let mut service_context = ServiceContext {
+            services: HashMap::new(),
+            shared_config: HashMap::new(),
+        };
+
+        // Load each service configuration and build context
+        for service in services {
+            let service_config_path = self.shared_services_path
+                .join(format!("{:?}", service.category).to_lowercase())
+                .join(&service.provider)
+                .join("anvil.yaml");
+
+            if service_config_path.exists() {
+                let service_config = crate::config::ServiceConfig::from_file(&service_config_path).await?;
+                
+                // Build service exports for dependency injection
+                let mut exports = HashMap::new();
+                
+                // Export common service information
+                exports.insert("provider".to_string(), Value::String(service.provider.clone()));
+                exports.insert("category".to_string(), Value::String(format!("{:?}", service.category)));
+                
+                // Export service-specific values based on category
+                match service.category {
+                    ServiceCategory::Auth => {
+                        exports.insert("auth_provider".to_string(), Value::String(service.provider.clone()));
+                        exports.insert("has_auth".to_string(), Value::Bool(true));
+                        // Export auth-specific environment variables
+                        for env_var in &service_config.environment_variables {
+                            if env_var.name.contains("PUBLISHABLE") || env_var.name.contains("PUBLIC") {
+                                exports.insert(
+                                    "public_auth_key_name".to_string(), 
+                                    Value::String(env_var.name.clone())
+                                );
+                            }
+                        }
+                    }
+                    ServiceCategory::Database => {
+                        exports.insert("database_provider".to_string(), Value::String(service.provider.clone()));
+                        exports.insert("has_database".to_string(), Value::Bool(true));
+                    }
+                    ServiceCategory::Payments => {
+                        exports.insert("payments_provider".to_string(), Value::String(service.provider.clone()));
+                        exports.insert("has_payments".to_string(), Value::Bool(true));
+                    }
+                    ServiceCategory::AI => {
+                        exports.insert("ai_provider".to_string(), Value::String(service.provider.clone()));
+                        exports.insert("has_ai".to_string(), Value::Bool(true));
+                    }
+                    _ => {
+                        // Generic exports for other service types
+                        exports.insert(
+                            format!("has_{}", format!("{:?}", service.category).to_lowercase()),
+                            Value::Bool(true)
+                        );
+                    }
+                }
+
+                let service_info = ServiceInfo {
+                    provider: service.provider.clone(),
+                    config: service.config.clone(),
+                    exports,
+                };
+
+                service_context.services.insert(format!("{:?}", service.category), service_info);
+            }
+        }
+
+        // Build shared configuration across all services
+        let mut has_any_auth = false;
+        let mut has_any_database = false;
+        
+        for (category_str, _service_info) in &service_context.services {
+            match category_str.as_str() {
+                "Auth" => has_any_auth = true,
+                "Database" => has_any_database = true,
+                _ => {}
+            }
+        }
+
+        service_context.shared_config.insert("has_any_auth".to_string(), Value::Bool(has_any_auth));
+        service_context.shared_config.insert("has_any_database".to_string(), Value::Bool(has_any_database));
+        service_context.shared_config.insert("service_count".to_string(), Value::Number(
+            serde_json::Number::from(services.len())
+        ));
+
+        Ok(service_context)
     }
 
     /*
@@ -543,11 +656,41 @@ impl CompositionEngine {
         
         // Create merged dependencies structure using serde_json::Value (for Tera compatibility)
         if !npm_dependencies.is_empty() {
-            merged_deps.insert("npm".to_string(), Value::Array(
-                npm_dependencies.into_iter()
-                    .map(|dep| Value::String(dep))
-                    .collect()
-            ));
+            let npm_deps: Vec<Value> = npm_dependencies.into_iter()
+                .map(|dep| {
+                    // Parse dependency with optional version (e.g., "@clerk/nextjs@^5.0.0")
+                    if let Some(_at_pos) = dep.rfind('@') {
+                        // Check if this is a scoped package or version specifier
+                        if dep.starts_with('@') && dep[1..].contains('@') {
+                            // Scoped package with version: @clerk/nextjs@^5.0.0
+                            let parts: Vec<&str> = dep.rsplitn(2, '@').collect();
+                            if parts.len() == 2 {
+                                let mut dep_obj = serde_json::Map::new();
+                                dep_obj.insert("name".to_string(), Value::String(parts[1].to_string()));
+                                dep_obj.insert("version".to_string(), Value::String(parts[0].to_string()));
+                                return Value::Object(dep_obj);
+                            }
+                        } else if !dep.starts_with('@') {
+                            // Non-scoped package with version: lodash@4.17.21
+                            let parts: Vec<&str> = dep.splitn(2, '@').collect();
+                            if parts.len() == 2 {
+                                let mut dep_obj = serde_json::Map::new();
+                                dep_obj.insert("name".to_string(), Value::String(parts[0].to_string()));
+                                dep_obj.insert("version".to_string(), Value::String(parts[1].to_string()));
+                                return Value::Object(dep_obj);
+                            }
+                        }
+                    }
+                    
+                    // Default: package without version specified
+                    let mut dep_obj = serde_json::Map::new();
+                    dep_obj.insert("name".to_string(), Value::String(dep));
+                    dep_obj.insert("version".to_string(), Value::String("^1.0.0".to_string()));
+                    Value::Object(dep_obj)
+                })
+                .collect();
+            
+            merged_deps.insert("npm".to_string(), Value::Array(npm_deps));
         }
         
         if !cargo_dependencies.is_empty() {

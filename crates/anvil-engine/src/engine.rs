@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use tera::Tera;
 use walkdir::WalkDir;
 use serde_yaml::Value;
+use chrono::{DateTime, Utc};
 
 use crate::config::TemplateConfig;
 use crate::error::{EngineError, EngineResult};
@@ -235,13 +236,8 @@ impl TemplateEngine {
         composed: crate::composition::ComposedTemplate,
         context: &Context,
     ) -> EngineResult<ProcessedTemplate> {
-        let mut tera_context = context.to_tera_context();
-        
-        // Add merged dependencies to context for template rendering
-        tera_context.insert("merged_dependencies", &composed.merged_dependencies);
-        
-        // Add environment variables to context
-        tera_context.insert("environment_variables", &composed.environment_variables);
+        // Build comprehensive shared context
+        let tera_context = self.build_shared_context(context, &composed)?;
         
         let mut processed_files = Vec::new();
         
@@ -358,6 +354,72 @@ impl TemplateEngine {
             .replace(' ', "-")
             .replace('_', "-");
         Ok(tera::Value::String(kebab_case))
+    }
+
+    /*
+    Builds a comprehensive shared context that combines user variables, service context,
+    template metadata, and build information for template rendering.
+    */
+    fn build_shared_context(
+        &self,
+        user_context: &Context,
+        composed: &crate::composition::ComposedTemplate,
+    ) -> EngineResult<tera::Context> {
+        let mut tera_context = user_context.to_tera_context();
+        
+        // Add template metadata
+        tera_context.insert("template", &serde_json::json!({
+            "name": composed.base_config.name,
+            "description": composed.base_config.description,
+            "version": composed.base_config.version,
+            "min_anvil_version": composed.base_config.min_anvil_version
+        }));
+        
+        // Add build context
+        let now: DateTime<Utc> = Utc::now();
+        tera_context.insert("build", &serde_json::json!({
+            "timestamp": now.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
+            "timestamp_iso": now.to_rfc3339(),
+            "year": now.format("%Y").to_string(),
+            "generator": "Anvil Template Engine",
+            "generator_version": env!("CARGO_PKG_VERSION")
+        }));
+        
+        // Add merged dependencies to context for template rendering
+        tera_context.insert("merged_dependencies", &composed.merged_dependencies);
+        
+        // Add environment variables to context
+        tera_context.insert("environment_variables", &composed.environment_variables);
+        
+        // Add service context for dependency injection (flattened for Tera compatibility)
+        for (service_name, service_info) in &composed.service_context.services {
+            tera_context.insert(&format!("service_{}", service_name.to_lowercase()), &service_info.provider);
+            for (export_key, export_value) in &service_info.exports {
+                tera_context.insert(&format!("{}_{}", service_name.to_lowercase(), export_key), export_value);
+            }
+        }
+        
+        // Add shared config
+        for (key, value) in &composed.service_context.shared_config {
+            tera_context.insert(key, value);
+        }
+        
+        // Add service summary for easy template access
+        let service_summary: Vec<serde_json::Value> = composed.service_context.services.iter()
+            .map(|(name, info)| serde_json::json!({
+                "category": name,
+                "provider": info.provider,
+                "has_config": !info.config.is_empty()
+            }))
+            .collect();
+        tera_context.insert("active_services", &service_summary);
+        
+        // Add utility flags
+        tera_context.insert("has_services", &(!composed.service_context.services.is_empty()));
+        tera_context.insert("has_dependencies", &(!composed.merged_dependencies.is_empty()));
+        tera_context.insert("has_environment_variables", &(!composed.environment_variables.is_empty()));
+        
+        Ok(tera_context)
     }
 
     fn rust_module_name_filter(value: &tera::Value, _: &HashMap<String, tera::Value>) -> tera::Result<tera::Value> {

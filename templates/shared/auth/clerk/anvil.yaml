@@ -5,7 +5,7 @@ category: "auth"
 
 dependencies:
   npm:
-    - "@clerk/nextjs"
+    - "@clerk/nextjs@^5.0.0"
 
 environment_variables:
   - name: "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"
