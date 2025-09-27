@@ -1,0 +1,38 @@
+name: "mongodb-database"
+description: "MongoDB database with Mongoose ODM"
+version: "2.0.0"
+category: "database"
+
+dependencies:
+  npm:
+    - "mongoose@^8.0.0"
+    - "@types/mongoose@^5.11.0"
+
+environment_variables:
+  - name: "MONGODB_URI"
+    description: "MongoDB connection string"
+    required: true
+
+configuration_prompts:
+  - name: "enable_atlas"
+    prompt: "Using MongoDB Atlas?"
+    prompt_type: "boolean"
+    default: "true"
+  - name: "include_auth_models"
+    prompt: "Include user authentication models?"
+    prompt_type: "boolean"
+    default: "true"
+
+files:
+  - path: "lib/mongodb.ts"
+    description: "MongoDB connection setup"
+  - path: "lib/models/User.ts"
+    description: "User model schema"
+  - path: "lib/models/index.ts"
+    description: "Model exports"
+
+setup_instructions: |
+  🚀 MongoDB Setup:
+  1. Create MongoDB Atlas cluster
+  2. Add connection string to MONGODB_URI
+  3. Configure database access and network settings
