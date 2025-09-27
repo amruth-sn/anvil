@@ -1,0 +1,39 @@
+name: "docker-deployment"
+description: "Docker containerization with multi-stage builds"
+version: "2.0.0"
+category: "deployment"
+
+dependencies:
+  npm: []
+
+configuration_prompts:
+  - name: "node_version"
+    prompt: "Node.js version:"
+    prompt_type: "select"
+    options: ["18-alpine", "20-alpine", "21-alpine"]
+    default: "20-alpine"
+  - name: "include_compose"
+    prompt: "Include Docker Compose?"
+    prompt_type: "boolean"
+    default: "true"
+  - name: "include_nginx"
+    prompt: "Include Nginx configuration?"
+    prompt_type: "boolean"
+    default: "false"
+
+files:
+  - path: "Dockerfile"
+    description: "Multi-stage Docker build"
+  - path: "docker-compose.yml"
+    description: "Docker Compose configuration"
+  - path: ".dockerignore"
+    description: "Docker ignore file"
+  - path: "nginx.conf"
+    description: "Nginx configuration"
+
+setup_instructions: |
+  🚀 Docker Setup:
+  1. Build: docker build -t app .
+  2. Run: docker run -p 3000:3000 app
+  3. Compose: docker-compose up
+  4. Production: Use docker-compose.prod.yml

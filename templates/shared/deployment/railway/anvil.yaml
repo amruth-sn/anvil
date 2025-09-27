@@ -1,0 +1,37 @@
+name: "railway-deployment"
+description: "Railway deployment with database and Redis"
+version: "2.0.0"
+category: "deployment"
+
+dependencies:
+  npm:
+    - "@railway/cli@latest"
+
+configuration_prompts:
+  - name: "include_database"
+    prompt: "Include PostgreSQL database?"
+    prompt_type: "boolean"
+    default: "true"
+  - name: "include_redis"
+    prompt: "Include Redis cache?"
+    prompt_type: "boolean"
+    default: "false"
+  - name: "auto_deploy"
+    prompt: "Enable auto-deploy from Git?"
+    prompt_type: "boolean"
+    default: "true"
+
+files:
+  - path: "railway.toml"
+    description: "Railway configuration"
+  - path: "Procfile"
+    description: "Process definitions"
+  - path: "scripts/railway-deploy.sh"
+    description: "Railway deployment script"
+
+setup_instructions: |
+  🚀 Railway Deployment Setup:
+  1. Install Railway CLI: npm i -g @railway/cli
+  2. Login: railway login
+  3. Initialize: railway init
+  4. Deploy: railway up
