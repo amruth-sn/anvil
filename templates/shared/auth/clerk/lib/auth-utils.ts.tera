@@ -1,0 +1,230 @@
+import { auth, currentUser } from "@clerk/nextjs/server"
+import { User } from "@clerk/nextjs/server"
+import { clerkConfiguration } from "./clerk-setup"
+
+// Server-side authentication utilities
+export async function getCurrentUser(): Promise<User | null> {
+  return await currentUser()
+}
+
+export async function requireAuth() {
+  const { userId } = auth()
+  if (!userId) {
+    throw new Error("Unauthorized - no user session found")
+  }
+  return userId
+}
+
+export async function requireUser() {
+  const user = await getCurrentUser()
+  if (!user) {
+    throw new Error("Unauthorized - user not found")
+  }
+  return user
+}
+
+// Role and permission checking
+export async function requireRole(requiredRole: string) {
+  const user = await requireUser()
+  const userRole = user.publicMetadata?.role as string
+  
+  if (userRole !== requiredRole) {
+    throw new Error(`Access denied - requires ${requiredRole} role, user has ${userRole}`)
+  }
+  
+  return user
+}
+
+export async function requirePermission(requiredPermission: string) {
+  const user = await requireUser()
+  const userPermissions = (user.publicMetadata?.permissions as string[]) || []
+  
+  if (!userPermissions.includes(requiredPermission)) {
+    throw new Error(`Access denied - requires ${requiredPermission} permission`)
+  }
+  
+  return user
+}
+
+export async function requireAnyRole(roles: string[]) {
+  const user = await requireUser()
+  const userRole = user.publicMetadata?.role as string
+  
+  if (!roles.includes(userRole)) {
+    throw new Error(`Access denied - requires one of [${roles.join(', ')}] roles, user has ${userRole}`)
+  }
+  
+  return user
+}
+
+// User information helpers
+export async function getUserRole(): Promise<string | null> {
+  const user = await getCurrentUser()
+  return (user?.publicMetadata?.role as string) || null
+}
+
+export async function getUserPermissions(): Promise<string[]> {
+  const user = await getCurrentUser()
+  return (user?.publicMetadata?.permissions as string[]) || []
+}
+
+export async function hasRole(role: string): Promise<boolean> {
+  const userRole = await getUserRole()
+  return userRole === role
+}
+
+export async function hasPermission(permission: string): Promise<boolean> {
+  const permissions = await getUserPermissions()
+  return permissions.includes(permission)
+}
+
+export async function hasAnyRole(roles: string[]): Promise<boolean> {
+  const userRole = await getUserRole()
+  return userRole ? roles.includes(userRole) : false
+}
+
+// User metadata helpers
+export async function updateUserMetadata(
+  userId: string,
+  metadata: Record<string, any>
+) {
+  // This would typically use Clerk's backend API
+  // For now, this is a placeholder for the pattern
+  console.log("Updating user metadata:", { userId, metadata })
+  
+  // Example implementation:
+  // const clerkClient = getClerkClient()
+  // await clerkClient.users.updateUserMetadata(userId, {
+  //   publicMetadata: metadata
+  // })
+}
+
+export async function addUserRole(userId: string, role: string) {
+  await updateUserMetadata(userId, { role })
+}
+
+export async function addUserPermission(userId: string, permission: string) {
+  const user = await getCurrentUser()
+  if (!user) throw new Error("User not found")
+  
+  const currentPermissions = (user.publicMetadata?.permissions as string[]) || []
+  const newPermissions = [...new Set([...currentPermissions, permission])]
+  
+  await updateUserMetadata(userId, { permissions: newPermissions })
+}
+
+export async function removeUserPermission(userId: string, permission: string) {
+  const user = await getCurrentUser()
+  if (!user) throw new Error("User not found")
+  
+  const currentPermissions = (user.publicMetadata?.permissions as string[]) || []
+  const newPermissions = currentPermissions.filter(p => p !== permission)
+  
+  await updateUserMetadata(userId, { permissions: newPermissions })
+}
+
+// Route protection helpers for API routes
+export function createProtectedHandler(
+  handler: (userId: string, user: User) => Promise<Response>,
+  options?: {
+    requiredRole?: string
+    requiredPermission?: string
+    requiredRoles?: string[]
+  }
+) {
+  return async (req: Request) => {
+    try {
+      const user = await requireUser()
+      
+      if (options?.requiredRole) {
+        await requireRole(options.requiredRole)
+      }
+      
+      if (options?.requiredPermission) {
+        await requirePermission(options.requiredPermission)
+      }
+      
+      if (options?.requiredRoles) {
+        await requireAnyRole(options.requiredRoles)
+      }
+      
+      return await handler(user.id, user)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unauthorized"
+      return new Response(JSON.stringify({ error: message }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" }
+      })
+    }
+  }
+}
+
+// Common role definitions (can be customized)
+export const ROLES = {
+  ADMIN: 'admin',
+  USER: 'user',
+  MODERATOR: 'moderator',
+  PREMIUM: 'premium',
+} as const
+
+export const PERMISSIONS = {
+  READ_USERS: 'read:users',
+  WRITE_USERS: 'write:users',
+  DELETE_USERS: 'delete:users',
+  MANAGE_SETTINGS: 'manage:settings',
+  VIEW_ANALYTICS: 'view:analytics',
+} as const
+
+// Type definitions
+export type UserRole = typeof ROLES[keyof typeof ROLES]
+export type UserPermission = typeof PERMISSIONS[keyof typeof PERMISSIONS]
+
+// Error classes
+export class AuthenticationError extends Error {
+  constructor(message: string = "Authentication required") {
+    super(message)
+    this.name = "AuthenticationError"
+  }
+}
+
+export class AuthorizationError extends Error {
+  constructor(message: string = "Insufficient permissions") {
+    super(message)
+    this.name = "AuthorizationError"
+  }
+}
+
+// Session helpers
+export async function isAuthenticated(): Promise<boolean> {
+  const { userId } = auth()
+  return !!userId
+}
+
+export async function getSessionClaims() {
+  const { sessionClaims } = auth()
+  return sessionClaims
+}
+
+// Organization helpers (if organizations are enabled)
+{% if clerkConfiguration.features.organizations %}
+export async function requireOrganization() {
+  const { orgId } = auth()
+  if (!orgId) {
+    throw new Error("Organization context required")
+  }
+  return orgId
+}
+
+export async function requireOrganizationRole(requiredRole: string) {
+  const { orgRole } = auth()
+  if (orgRole !== requiredRole) {
+    throw new Error(`Organization role ${requiredRole} required`)
+  }
+  return orgRole
+}
+
+export async function hasOrganizationRole(role: string): Promise<boolean> {
+  const { orgRole } = auth()
+  return orgRole === role
+}
+{% endif %}

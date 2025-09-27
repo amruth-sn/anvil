@@ -1,11 +1,12 @@
 name: "clerk-auth"
-description: "Clerk authentication integration"
-version: "1.0.0"
+description: "Clerk authentication integration with comprehensive role-based access control"
+version: "2.0.0"
 category: "auth"
 
 dependencies:
   npm:
     - "@clerk/nextjs@^5.0.0"
+    - "svix@^1.15.0"
 
 environment_variables:
   - name: "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"
@@ -14,6 +15,9 @@ environment_variables:
   - name: "CLERK_SECRET_KEY"
     description: "Clerk secret key"
     required: true
+  - name: "CLERK_WEBHOOK_SECRET"
+    description: "Clerk webhook secret for secure webhook verification"
+    required: false
 
 configuration_prompts:
   - name: "app_name"
@@ -37,13 +41,78 @@ configuration_prompts:
     options: ["company", "role", "phone", "address", "custom_id"]
     required: false
     description: "Select additional fields to collect during user registration"
+  - name: "enable_organizations"
+    prompt: "Enable Clerk organizations for team management?"
+    prompt_type: "boolean"
+    default: "false"
+    description: "Adds support for organizations and team-based access control"
+  - name: "enable_webhooks"
+    prompt: "Set up webhooks for user events synchronization?"
+    prompt_type: "boolean"
+    default: "false"
+    description: "Enables webhooks to sync user data and handle user lifecycle events"
 
 files:
   - path: "middleware.ts"
-    description: "Clerk middleware for route protection"
+    description: "Enhanced Clerk middleware with configurable route protection"
   - path: "app/sign-in/[[...sign-in]]/page.tsx"
-    description: "Sign in page component"
+    description: "Customizable sign in page component"
   - path: "app/sign-up/[[...sign-up]]/page.tsx"
-    description: "Sign up page component"
+    description: "Customizable sign up page component"
   - path: "components/auth/user-button.tsx"
-    description: "User profile button component"
+    description: "Enhanced user profile button with custom styling and actions"
+  - path: "components/auth/protected-route.tsx"
+    description: "Protected route component with role and permission checking"
+  - path: "app/api/webhooks/clerk/route.ts"
+    description: "Clerk webhook handler for user lifecycle events"
+  - path: "lib/clerk-setup.ts"
+    description: "Comprehensive Clerk configuration and setup instructions"
+  - path: "lib/auth-utils.ts"
+    description: "Server-side authentication utilities and role management"
+
+features:
+  - name: "authentication"
+    description: "Email/password and social login authentication"
+    enabled: true
+  - name: "role_based_access"
+    description: "Role-based access control with custom roles and permissions"
+    enabled: true
+  - name: "protected_routes"
+    description: "Automatic route protection with middleware"
+    enabled: true
+  - name: "user_management"
+    description: "User profile management and metadata handling"
+    enabled: true
+  - name: "webhooks"
+    description: "Webhook integration for user lifecycle events"
+    enabled_when: "enable_webhooks == true"
+  - name: "organizations"
+    description: "Organization and team management"
+    enabled_when: "enable_organizations == true"
+
+setup_instructions: |
+  🚀 Complete Clerk Authentication Setup:
+  
+  1. Create Clerk Application:
+     - Go to https://dashboard.clerk.com
+     - Create new application with your chosen name
+     - Copy publishable and secret keys to environment variables
+  
+  2. Configure Authentication:
+     - Enable desired social login providers
+     - Set up domain restrictions if needed
+     - Configure user metadata fields
+  
+  3. Set Up Webhooks (if enabled):
+     - Add webhook endpoint: https://yourdomain.com/api/webhooks/clerk
+     - Select events: user.created, user.updated, user.deleted
+     - Copy webhook secret to environment variables
+  
+  4. Configure Organizations (if enabled):
+     - Enable organizations in Clerk Dashboard
+     - Set up organization roles and permissions
+  
+  5. Production Setup:
+     - Update environment variables with production keys
+     - Configure production domains and redirect URLs
+     - Review security settings and rate limits

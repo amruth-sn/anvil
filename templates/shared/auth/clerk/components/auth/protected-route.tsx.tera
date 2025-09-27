@@ -1,0 +1,157 @@
+'use client'
+
+import { useAuth, useUser } from "@clerk/nextjs"
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { clerkConfiguration } from "../../lib/clerk-setup"
+
+interface ProtectedRouteProps {
+  children: React.ReactNode
+  fallback?: React.ReactNode
+  requiredRole?: string
+  requiredPermission?: string
+  redirectTo?: string
+}
+
+export function ProtectedRoute({ 
+  children, 
+  fallback,
+  requiredRole,
+  requiredPermission,
+  redirectTo = "/sign-in"
+}: ProtectedRouteProps) {
+  const { isLoaded, userId, isSignedIn } = useAuth()
+  const { user } = useUser()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (isLoaded && !isSignedIn) {
+      const currentPath = window.location.pathname
+      const signInUrl = `${redirectTo}?redirect_url=${encodeURIComponent(currentPath)}`
+      router.push(signInUrl)
+    }
+  }, [isLoaded, isSignedIn, router, redirectTo])
+
+  // Loading state
+  if (!isLoaded) {
+    return fallback || <ProtectedRouteLoading />
+  }
+
+  // Not signed in
+  if (!isSignedIn || !userId) {
+    return fallback || <ProtectedRouteLoading />
+  }
+
+  // Check role-based access
+  if (requiredRole && user) {
+    const userRole = user.publicMetadata?.role as string
+    if (userRole !== requiredRole) {
+      return <AccessDenied requiredRole={requiredRole} userRole={userRole} />
+    }
+  }
+
+  // Check permission-based access
+  if (requiredPermission && user) {
+    const userPermissions = (user.publicMetadata?.permissions as string[]) || []
+    if (!userPermissions.includes(requiredPermission)) {
+      return <AccessDenied requiredPermission={requiredPermission} />
+    }
+  }
+
+  return <>{children}</>
+}
+
+function ProtectedRouteLoading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+        <p className="mt-4 text-gray-600">Loading...</p>
+      </div>
+    </div>
+  )
+}
+
+function AccessDenied({ 
+  requiredRole, 
+  userRole, 
+  requiredPermission 
+}: { 
+  requiredRole?: string
+  userRole?: string
+  requiredPermission?: string
+}) {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <div className="text-6xl text-red-500 mb-4">🚫</div>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+        {requiredRole && (
+          <p className="text-gray-600">
+            This page requires <strong>{requiredRole}</strong> role.
+            {userRole && ` You have <strong>${userRole}</strong> role.`}
+          </p>
+        )}
+        {requiredPermission && (
+          <p className="text-gray-600">
+            This page requires <strong>{requiredPermission}</strong> permission.
+          </p>
+        )}
+        <button 
+          onClick={() => window.history.back()}
+          className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Go Back
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// Higher-order component version
+export function withProtectedRoute<P extends object>(
+  Component: React.ComponentType<P>,
+  options?: {
+    requiredRole?: string
+    requiredPermission?: string
+    redirectTo?: string
+  }
+) {
+  return function ProtectedComponent(props: P) {
+    return (
+      <ProtectedRoute {...options}>
+        <Component {...props} />
+      </ProtectedRoute>
+    )
+  }
+}
+
+// Role checking hook
+export function useRole() {
+  const { user } = useUser()
+  
+  const hasRole = (role: string) => {
+    if (!user) return false
+    return user.publicMetadata?.role === role
+  }
+  
+  const hasPermission = (permission: string) => {
+    if (!user) return false
+    const permissions = (user.publicMetadata?.permissions as string[]) || []
+    return permissions.includes(permission)
+  }
+  
+  const hasAnyRole = (roles: string[]) => {
+    if (!user) return false
+    const userRole = user.publicMetadata?.role as string
+    return roles.includes(userRole)
+  }
+  
+  return {
+    userRole: user?.publicMetadata?.role as string,
+    userPermissions: (user?.publicMetadata?.permissions as string[]) || [],
+    hasRole,
+    hasPermission,
+    hasAnyRole,
+  }
+}

@@ -1,0 +1,170 @@
+import { NextRequest, NextResponse } from "next/server"
+import { headers } from "next/headers"
+import { Webhook } from "svix"
+import { WebhookEvent } from "@clerk/nextjs/server"
+
+export async function POST(req: NextRequest) {
+  // Get the headers
+  const headerPayload = headers()
+  const svix_id = headerPayload.get("svix-id")
+  const svix_timestamp = headerPayload.get("svix-timestamp")
+  const svix_signature = headerPayload.get("svix-signature")
+
+  // If there are no headers, error out
+  if (!svix_id || !svix_timestamp || !svix_signature) {
+    return new Response("Error occurred -- no svix headers", {
+      status: 400,
+    })
+  }
+
+  // Get the body
+  const payload = await req.text()
+  const body = JSON.parse(payload)
+
+  // Create a new Svix instance with your secret.
+  const wh = new Webhook(process.env.CLERK_WEBHOOK_SECRET || "")
+
+  let evt: WebhookEvent
+
+  // Verify the payload with the headers
+  try {
+    evt = wh.verify(payload, {
+      "svix-id": svix_id,
+      "svix-timestamp": svix_timestamp,
+      "svix-signature": svix_signature,
+    }) as WebhookEvent
+  } catch (err) {
+    console.error("Error verifying webhook:", err)
+    return new Response("Error occurred", {
+      status: 400,
+    })
+  }
+
+  // Handle the webhook
+  const { id } = evt.data
+  const eventType = evt.type
+
+  console.log(`Webhook ${id} with a type of ${eventType}`)
+  console.log("Webhook body:", body)
+
+  switch (eventType) {
+    case "user.created":
+      await handleUserCreated(evt.data)
+      break
+    case "user.updated":
+      await handleUserUpdated(evt.data)
+      break
+    case "user.deleted":
+      await handleUserDeleted(evt.data)
+      break
+    case "session.created":
+      await handleSessionCreated(evt.data)
+      break
+    case "session.ended":
+      await handleSessionEnded(evt.data)
+      break
+    default:
+      console.log(`Unhandled webhook event type: ${eventType}`)
+  }
+
+  return new Response("", { status: 200 })
+}
+
+async function handleUserCreated(data: any) {
+  console.log("👤 User created:", data.id)
+  
+  try {
+    // Example: Sync user to your database
+    // await createUserInDatabase({
+    //   clerkId: data.id,
+    //   email: data.email_addresses[0]?.email_address,
+    //   firstName: data.first_name,
+    //   lastName: data.last_name,
+    //   imageUrl: data.image_url,
+    //   createdAt: new Date(data.created_at),
+    // })
+
+    // Example: Send welcome email
+    // await sendWelcomeEmail(data.email_addresses[0]?.email_address)
+
+    // Example: Set up default user preferences
+    // await setupDefaultPreferences(data.id)
+
+    console.log("✅ User creation handled successfully")
+  } catch (error) {
+    console.error("❌ Error handling user creation:", error)
+  }
+}
+
+async function handleUserUpdated(data: any) {
+  console.log("✏️ User updated:", data.id)
+  
+  try {
+    // Example: Update user in your database
+    // await updateUserInDatabase(data.id, {
+    //   email: data.email_addresses[0]?.email_address,
+    //   firstName: data.first_name,
+    //   lastName: data.last_name,
+    //   imageUrl: data.image_url,
+    //   updatedAt: new Date(data.updated_at),
+    // })
+
+    console.log("✅ User update handled successfully")
+  } catch (error) {
+    console.error("❌ Error handling user update:", error)
+  }
+}
+
+async function handleUserDeleted(data: any) {
+  console.log("🗑️ User deleted:", data.id)
+  
+  try {
+    // Example: Clean up user data
+    // await deleteUserFromDatabase(data.id)
+    // await cleanupUserFiles(data.id)
+    // await cancelUserSubscriptions(data.id)
+
+    console.log("✅ User deletion handled successfully")
+  } catch (error) {
+    console.error("❌ Error handling user deletion:", error)
+  }
+}
+
+async function handleSessionCreated(data: any) {
+  console.log("🔑 Session created for user:", data.user_id)
+  
+  try {
+    // Example: Track user login
+    // await trackUserLogin(data.user_id, {
+    //   sessionId: data.id,
+    //   ipAddress: data.last_active_at,
+    //   userAgent: data.user_agent,
+    //   createdAt: new Date(data.created_at),
+    // })
+
+    console.log("✅ Session creation handled successfully")
+  } catch (error) {
+    console.error("❌ Error handling session creation:", error)
+  }
+}
+
+async function handleSessionEnded(data: any) {
+  console.log("🚪 Session ended for user:", data.user_id)
+  
+  try {
+    // Example: Track user logout
+    // await trackUserLogout(data.user_id, {
+    //   sessionId: data.id,
+    //   endedAt: new Date(data.ended_at),
+    // })
+
+    console.log("✅ Session end handled successfully")
+  } catch (error) {
+    console.error("❌ Error handling session end:", error)
+  }
+}
+
+// Helper function to get user data
+export async function GET(req: NextRequest) {
+  return new Response("Clerk webhook endpoint is working!", { status: 200 })
+}
