@@ -1,0 +1,163 @@
+import { createServerComponentClient, createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@supabase/supabase-js'
+import { cookies } from 'next/headers'
+import type { Database } from './supabase-client'
+
+// Server-side Supabase client for use in Server Components
+export const createServerSupabaseClient = () => {
+  const cookieStore = cookies()
+  return createServerComponentClient<Database>({ cookies: () => cookieStore })
+}
+
+// Server-side Supabase client for use in API routes
+export const createRouteHandlerSupabaseClient = () => {
+  const cookieStore = cookies()
+  return createRouteHandlerClient<Database>({ cookies: () => cookieStore })
+}
+
+// Admin client for server-side operations (bypasses RLS)
+export const supabaseAdmin = createClient<Database>(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  }
+)
+
+// Helper to get the current user on the server
+export async function getCurrentUser() {
+  const supabase = createServerSupabaseClient()
+  
+  try {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser()
+    
+    if (error) {
+      console.error('Error getting current user:', error)
+      return null
+    }
+    
+    return user
+  } catch (error) {
+    console.error('Error in getCurrentUser:', error)
+    return null
+  }
+}
+
+// Helper to get the current session on the server
+export async function getCurrentSession() {
+  const supabase = createServerSupabaseClient()
+  
+  try {
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession()
+    
+    if (error) {
+      console.error('Error getting current session:', error)
+      return null
+    }
+    
+    return session
+  } catch (error) {
+    console.error('Error in getCurrentSession:', error)
+    return null
+  }
+}
+
+// Helper to require authentication on the server
+export async function requireAuth() {
+  const user = await getCurrentUser()
+  
+  if (!user) {
+    throw new Error('Authentication required')
+  }
+  
+  return user
+}
+
+{% if auth_config_enable_rls %}
+// Helper to get user profile with RLS
+export async function getUserProfile(userId?: string) {
+  const supabase = createServerSupabaseClient()
+  const targetUserId = userId || (await getCurrentUser())?.id
+  
+  if (!targetUserId) {
+    return null
+  }
+  
+  const { data: profile, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', targetUserId)
+    .single()
+  
+  if (error) {
+    console.error('Error getting user profile:', error)
+    return null
+  }
+  
+  return profile
+}
+
+// Helper to create or update user profile
+export async function upsertUserProfile(profile: Database['public']['Tables']['profiles']['Insert']) {
+  const supabase = createServerSupabaseClient()
+  
+  const { data, error } = await supabase
+    .from('profiles')
+    .upsert(profile)
+    .select()
+    .single()
+  
+  if (error) {
+    throw new Error(`Failed to upsert profile: ${error.message}`)
+  }
+  
+  return data
+}
+{% endif %}
+
+// Helper for admin operations
+export async function adminGetUser(userId: string) {
+  const { data: user, error } = await supabaseAdmin.auth.admin.getUserById(userId)
+  
+  if (error) {
+    throw new Error(`Failed to get user: ${error.message}`)
+  }
+  
+  return user
+}
+
+export async function adminCreateUser(email: string, password: string, metadata?: object) {
+  const { data, error } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password,
+    user_metadata: metadata,
+    email_confirm: true,
+  })
+  
+  if (error) {
+    throw new Error(`Failed to create user: ${error.message}`)
+  }
+  
+  return data
+}
+
+export async function adminDeleteUser(userId: string) {
+  const { error } = await supabaseAdmin.auth.admin.deleteUser(userId)
+  
+  if (error) {
+    throw new Error(`Failed to delete user: ${error.message}`)
+  }
+}
+
+// Type exports
+export type ServerSupabaseClient = ReturnType<typeof createServerSupabaseClient>
+export type RouteHandlerSupabaseClient = ReturnType<typeof createRouteHandlerSupabaseClient>

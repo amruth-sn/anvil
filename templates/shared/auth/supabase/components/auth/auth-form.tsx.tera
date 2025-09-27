@@ -1,0 +1,180 @@
+'use client'
+
+import { Auth } from '@supabase/auth-ui-react'
+import { ThemeSupa } from '@supabase/auth-ui-shared'
+import { supabase } from '@/lib/supabase-client'
+import { useRouter } from 'next/navigation'
+import { useEffect } from 'react'
+
+interface AuthFormProps {
+  redirectTo?: string
+  view?: 'sign_in' | 'sign_up' | 'magic_link' | 'forgotten_password'
+  showLinks?: boolean
+  className?: string
+}
+
+export function AuthForm({ 
+  redirectTo = '/dashboard',
+  view = 'sign_in',
+  showLinks = true,
+  className = "max-w-md mx-auto"
+}: AuthFormProps) {
+  const router = useRouter()
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        router.push(redirectTo)
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [router, redirectTo])
+
+  return (
+    <div className={className}>
+      <Auth
+        supabaseClient={supabase}
+        view={view}
+        appearance={{
+          theme: ThemeSupa,
+          variables: {
+            default: {
+              colors: {
+                brand: '#3b82f6',
+                brandAccent: '#2563eb',
+                brandButtonText: 'white',
+                defaultButtonBackground: '#f8fafc',
+                defaultButtonBackgroundHover: '#f1f5f9',
+                defaultButtonBorder: '#e2e8f0',
+                defaultButtonText: '#374151',
+                dividerBackground: '#e5e7eb',
+                inputBackground: 'white',
+                inputBorder: '#d1d5db',
+                inputBorderHover: '#9ca3af',
+                inputBorderFocus: '#3b82f6',
+                inputText: '#111827',
+                inputLabelText: '#374151',
+                inputPlaceholder: '#9ca3af',
+                messageText: '#dc2626',
+                messageTextDanger: '#dc2626',
+                anchorTextColor: '#3b82f6',
+                anchorTextHoverColor: '#2563eb',
+              },
+              space: {
+                spaceSmall: '4px',
+                spaceMedium: '8px',
+                spaceLarge: '16px',
+                labelBottomMargin: '8px',
+                anchorBottomMargin: '4px',
+                emailInputSpacing: '4px',
+                socialAuthSpacing: '4px',
+                buttonPadding: '10px 15px',
+                inputPadding: '10px 15px',
+              },
+              fontSizes: {
+                baseBodySize: '14px',
+                baseInputSize: '14px',
+                baseLabelSize: '14px',
+                baseButtonSize: '14px',
+              },
+              fonts: {
+                bodyFontFamily: `ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif`,
+                buttonFontFamily: `ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif`,
+                inputFontFamily: `ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif`,
+                labelFontFamily: `ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif`,
+              },
+              borderWidths: {
+                buttonBorderWidth: '1px',
+                inputBorderWidth: '1px',
+              },
+              radii: {
+                borderRadiusButton: '6px',
+                buttonBorderRadius: '6px',
+                inputBorderRadius: '6px',
+              },
+            },
+          },
+        }}
+        providers={[
+          {% if auth_config_enable_social_providers %}
+          'google',
+          'github',
+          'discord'
+          {% endif %}
+        ]}
+        redirectTo={`${window.location.origin}/api/auth/callback`}
+        showLinks={showLinks}
+        localization={{
+          variables: {
+            sign_in: {
+              email_label: 'Email address',
+              password_label: 'Password',
+              button_label: 'Sign In',
+              loading_button_label: 'Signing in...',
+              social_provider_text: 'Sign in with {{provider}}',
+              link_text: "Don't have an account? Sign up",
+            },
+            sign_up: {
+              email_label: 'Email address',
+              password_label: 'Create a password',
+              button_label: 'Sign Up',
+              loading_button_label: 'Signing up...',
+              social_provider_text: 'Sign up with {{provider}}',
+              link_text: 'Already have an account? Sign in',
+              confirmation_text: 'Check your email for the confirmation link',
+            },
+            magic_link: {
+              email_label: 'Email address',
+              button_label: 'Send magic link',
+              loading_button_label: 'Sending magic link...',
+              link_text: 'Send a magic link email',
+              confirmation_text: 'Check your email for the magic link',
+            },
+            forgotten_password: {
+              email_label: 'Email address',
+              button_label: 'Send reset instructions',
+              loading_button_label: 'Sending reset instructions...',
+              link_text: 'Forgot your password?',
+              confirmation_text: 'Check your email for the reset link',
+            },
+          },
+        }}
+      />
+    </div>
+  )
+}
+
+// Separate sign-in form
+export function SignInForm({ redirectTo = '/dashboard' }: { redirectTo?: string }) {
+  return (
+    <AuthForm 
+      view="sign_in" 
+      redirectTo={redirectTo}
+      className="w-full max-w-sm mx-auto"
+    />
+  )
+}
+
+// Separate sign-up form
+export function SignUpForm({ redirectTo = '/dashboard' }: { redirectTo?: string }) {
+  return (
+    <AuthForm 
+      view="sign_up" 
+      redirectTo={redirectTo}
+      className="w-full max-w-sm mx-auto"
+    />
+  )
+}
+
+// Magic link form
+export function MagicLinkForm({ redirectTo = '/dashboard' }: { redirectTo?: string }) {
+  return (
+    <AuthForm 
+      view="magic_link" 
+      redirectTo={redirectTo}
+      className="w-full max-w-sm mx-auto"
+      showLinks={false}
+    />
+  )
+}

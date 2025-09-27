@@ -1,0 +1,131 @@
+name: "supabase-auth"
+description: "Supabase authentication with real-time features and RLS"
+version: "2.0.0"
+category: "auth"
+
+dependencies:
+  npm:
+    - "@supabase/auth-helpers-nextjs@^0.10.0"
+    - "@supabase/supabase-js@^2.39.0"
+    - "@supabase/auth-ui-react@^0.4.0"
+    - "@supabase/auth-ui-shared@^0.1.0"
+
+environment_variables:
+  - name: "NEXT_PUBLIC_SUPABASE_URL"
+    description: "Supabase project URL"
+    required: true
+  - name: "NEXT_PUBLIC_SUPABASE_ANON_KEY"
+    description: "Supabase anonymous/public key"
+    required: true
+  - name: "SUPABASE_SERVICE_ROLE_KEY"
+    description: "Supabase service role key (server-side only)"
+    required: false
+
+configuration_prompts:
+  - name: "supabase_url"
+    prompt: "What's your Supabase project URL?"
+    prompt_type: "text"
+    required: true
+    description: "Your Supabase project URL (https://your-project.supabase.co)"
+  - name: "enable_social_providers"
+    prompt: "Enable social login providers?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Configure Google, GitHub, Discord social auth"
+  - name: "enable_email_auth"
+    prompt: "Enable email/password authentication?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Allow users to sign up with email and password"
+  - name: "enable_phone_auth"
+    prompt: "Enable phone authentication?"
+    prompt_type: "boolean"
+    default: "false"
+    description: "Allow users to sign in with phone number (SMS)"
+  - name: "enable_magic_links"
+    prompt: "Enable magic link authentication?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Allow passwordless login via email magic links"
+  - name: "enable_realtime"
+    prompt: "Enable real-time authentication state?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Real-time auth state synchronization across tabs"
+  - name: "enable_rls"
+    prompt: "Set up Row Level Security (RLS) helpers?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Include RLS policy helpers and user context"
+
+files:
+  - path: "lib/supabase-client.ts"
+    description: "Supabase client configuration for client-side"
+  - path: "lib/supabase-server.ts"
+    description: "Supabase client configuration for server-side"
+  - path: "lib/auth-utils.ts"
+    description: "Authentication utilities and session helpers"
+  - path: "components/auth/auth-form.tsx"
+    description: "Complete authentication form with all methods"
+  - path: "components/auth/sign-out-button.tsx"
+    description: "Sign out button component"
+  - path: "components/auth/user-profile.tsx"
+    description: "User profile display component"
+  - path: "components/auth/protected-route.tsx"
+    description: "Protected route wrapper component"
+  - path: "hooks/use-auth.ts"
+    description: "Custom auth hook for user state management"
+  - path: "app/api/auth/callback/route.ts"
+    description: "Auth callback handler for OAuth providers"
+  - path: "middleware.ts"
+    description: "Supabase middleware for session management"
+
+features:
+  - name: "email_auth"
+    description: "Email/password authentication"
+    enabled_when: "enable_email_auth == true"
+  - name: "social_auth"
+    description: "Social provider authentication"
+    enabled_when: "enable_social_providers == true"
+  - name: "phone_auth"
+    description: "Phone/SMS authentication"
+    enabled_when: "enable_phone_auth == true"
+  - name: "magic_links"
+    description: "Magic link passwordless authentication"
+    enabled_when: "enable_magic_links == true"
+  - name: "realtime_auth"
+    description: "Real-time authentication state synchronization"
+    enabled_when: "enable_realtime == true"
+  - name: "row_level_security"
+    description: "RLS helpers and user context"
+    enabled_when: "enable_rls == true"
+
+setup_instructions: |
+  🚀 Complete Supabase Authentication Setup:
+  
+  1. Create Supabase Project:
+     - Go to https://app.supabase.com
+     - Create new project and note URL and keys
+     - Copy URL and anon key to environment variables
+  
+  2. Configure Authentication:
+     - Go to Authentication → Settings in dashboard
+     - Enable desired auth providers (email, social, phone)
+     - Configure redirect URLs: https://yourdomain.com/api/auth/callback
+  
+  3. Set Up Social Providers (if enabled):
+     - Configure OAuth apps for Google, GitHub, Discord
+     - Add client IDs and secrets in Supabase dashboard
+  
+  4. Database Setup (if using RLS):
+     - Enable RLS on your tables
+     - Create user policies based on auth.uid()
+  
+  5. Email Configuration:
+     - Set up custom SMTP (optional)
+     - Customize email templates
+  
+  6. Production Setup:
+     - Update site URL and redirect URLs
+     - Configure rate limiting
+     - Set up proper CORS policies

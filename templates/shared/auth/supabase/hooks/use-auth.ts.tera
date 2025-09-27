@@ -1,0 +1,304 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { User, Session } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabase-client'
+
+interface AuthState {
+  user: User | null
+  session: Session | null
+  loading: boolean
+}
+
+export function useAuth() {
+  const [authState, setAuthState] = useState<AuthState>({
+    user: null,
+    session: null,
+    loading: true,
+  })
+
+  useEffect(() => {
+    // Get initial session
+    const getInitialSession = async () => {
+      const { data: { session }, error } = await supabase.auth.getSession()
+      
+      if (error) {
+        console.error('Error getting session:', error)
+      }
+      
+      setAuthState({
+        user: session?.user ?? null,
+        session,
+        loading: false,
+      })
+    }
+
+    getInitialSession()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.email)
+        
+        setAuthState({
+          user: session?.user ?? null,
+          session,
+          loading: false,
+        })
+
+        // Handle specific events
+        if (event === 'SIGNED_IN') {
+          console.log('User signed in:', session?.user?.email)
+          {% if auth_config_enable_rls %}
+          // Create or update user profile
+          if (session?.user) {
+            await createOrUpdateProfile(session.user)
+          }
+          {% endif %}
+        } else if (event === 'SIGNED_OUT') {
+          console.log('User signed out')
+        }
+      }
+    )
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [])
+
+  // Auth methods
+  const signOut = async () => {
+    const { error } = await supabase.auth.signOut()
+    if (error) {
+      console.error('Error signing out:', error)
+      throw error
+    }
+  }
+
+  const signInWithPassword = async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+    
+    if (error) {
+      throw error
+    }
+    
+    return data
+  }
+
+  const signUpWithPassword = async (email: string, password: string, metadata?: object) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: metadata,
+      },
+    })
+    
+    if (error) {
+      throw error
+    }
+    
+    return data
+  }
+
+  const signInWithOAuth = async (provider: 'google' | 'github' | 'discord') => {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: `${window.location.origin}/api/auth/callback`,
+      },
+    })
+    
+    if (error) {
+      throw error
+    }
+    
+    return data
+  }
+
+  {% if auth_config_enable_magic_links %}
+  const signInWithMagicLink = async (email: string) => {
+    const { data, error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/api/auth/callback`,
+      },
+    })
+    
+    if (error) {
+      throw error
+    }
+    
+    return data
+  }
+  {% endif %}
+
+  {% if auth_config_enable_phone_auth %}
+  const signInWithPhone = async (phone: string, password: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      phone,
+      password,
+    })
+    
+    if (error) {
+      throw error
+    }
+    
+    return data
+  }
+
+  const signUpWithPhone = async (phone: string, password: string) => {
+    const { data, error } = await supabase.auth.signUp({
+      phone,
+      password,
+    })
+    
+    if (error) {
+      throw error
+    }
+    
+    return data
+  }
+  {% endif %}
+
+  const resetPassword = async (email: string) => {
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/reset-password`,
+    })
+    
+    if (error) {
+      throw error
+    }
+    
+    return data
+  }
+
+  const updatePassword = async (password: string) => {
+    const { data, error } = await supabase.auth.updateUser({
+      password,
+    })
+    
+    if (error) {
+      throw error
+    }
+    
+    return data
+  }
+
+  return {
+    // State
+    user: authState.user,
+    session: authState.session,
+    loading: authState.loading,
+    isAuthenticated: !!authState.user,
+    
+    // Methods
+    signOut,
+    signInWithPassword,
+    signUpWithPassword,
+    signInWithOAuth,
+    {% if auth_config_enable_magic_links %}
+    signInWithMagicLink,
+    {% endif %}
+    {% if auth_config_enable_phone_auth %}
+    signInWithPhone,
+    signUpWithPhone,
+    {% endif %}
+    resetPassword,
+    updatePassword,
+  }
+}
+
+{% if auth_config_enable_rls %}
+// Helper function to create or update user profile
+async function createOrUpdateProfile(user: User) {
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .upsert({
+        id: user.id,
+        email: user.email!,
+        full_name: user.user_metadata?.full_name || null,
+        avatar_url: user.user_metadata?.avatar_url || null,
+        updated_at: new Date().toISOString(),
+      })
+    
+    if (error) {
+      console.error('Error creating/updating profile:', error)
+    }
+  } catch (error) {
+    console.error('Error in createOrUpdateProfile:', error)
+  }
+}
+{% endif %}
+
+// Custom hook for user profile
+{% if auth_config_enable_rls %}
+export function useProfile() {
+  const { user } = useAuth()
+  const [profile, setProfile] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!user) {
+      setProfile(null)
+      setLoading(false)
+      return
+    }
+
+    const fetchProfile = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single()
+
+        if (error && error.code !== 'PGRST116') {
+          console.error('Error fetching profile:', error)
+        } else {
+          setProfile(data)
+        }
+      } catch (error) {
+        console.error('Error in fetchProfile:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchProfile()
+  }, [user])
+
+  const updateProfile = async (updates: any) => {
+    if (!user) return
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', user.id)
+        .select()
+        .single()
+
+      if (error) {
+        throw error
+      }
+
+      setProfile(data)
+      return data
+    } catch (error) {
+      console.error('Error updating profile:', error)
+      throw error
+    }
+  }
+
+  return {
+    profile,
+    loading,
+    updateProfile,
+  }
+}
+{% endif %}

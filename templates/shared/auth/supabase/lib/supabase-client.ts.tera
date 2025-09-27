@@ -1,0 +1,79 @@
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@supabase/supabase-js'
+
+// Client-side Supabase client for use in React components
+export const supabase = createClientComponentClient({
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+})
+
+// Alternative direct client creation (if needed)
+export const supabaseClient = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  {
+    auth: {
+      {% if auth_config_enable_realtime %}
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+      {% endif %}
+      flowType: 'pkce',
+    },
+    {% if auth_config_enable_realtime %}
+    realtime: {
+      params: {
+        eventsPerSecond: 10,
+      },
+    },
+    {% endif %}
+  }
+)
+
+// Database types (you should generate these with Supabase CLI)
+export type Database = {
+  public: {
+    Tables: {
+      profiles: {
+        Row: {
+          id: string
+          email: string
+          full_name: string | null
+          avatar_url: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          email: string
+          full_name?: string | null
+          avatar_url?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          email?: string
+          full_name?: string | null
+          avatar_url?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
+    }
+  }
+}
+
+// Typed Supabase client
+export type TypedSupabaseClient = ReturnType<typeof createClientComponentClient<Database>>
+
+export default supabase
