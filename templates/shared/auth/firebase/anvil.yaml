@@ -1,0 +1,50 @@
+name: "firebase-auth"
+description: "Firebase authentication with real-time features"
+version: "2.0.0"
+category: "auth"
+
+dependencies:
+  npm:
+    - "firebase@^10.7.0"
+    - "firebase-admin@^12.0.0"
+
+environment_variables:
+  - name: "NEXT_PUBLIC_FIREBASE_API_KEY"
+    description: "Firebase API key"
+    required: true
+  - name: "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN"
+    description: "Firebase auth domain"
+    required: true
+  - name: "NEXT_PUBLIC_FIREBASE_PROJECT_ID"
+    description: "Firebase project ID"
+    required: true
+  - name: "FIREBASE_ADMIN_PRIVATE_KEY"
+    description: "Firebase admin private key"
+    required: true
+  - name: "FIREBASE_ADMIN_CLIENT_EMAIL"
+    description: "Firebase admin client email"
+    required: true
+
+configuration_prompts:
+  - name: "enable_social_providers"
+    prompt: "Enable social login providers?"
+    prompt_type: "boolean"
+    default: "true"
+  - name: "enable_phone_auth"
+    prompt: "Enable phone authentication?"
+    prompt_type: "boolean"
+    default: "false"
+  - name: "enable_custom_claims"
+    prompt: "Enable custom claims for roles?"
+    prompt_type: "boolean"
+    default: "true"
+
+files:
+  - path: "lib/firebase-client.ts"
+    description: "Firebase client configuration"
+  - path: "lib/firebase-admin.ts"
+    description: "Firebase admin configuration"
+  - path: "components/auth/firebase-auth.tsx"
+    description: "Firebase authentication components"
+  - path: "hooks/use-firebase-auth.ts"
+    description: "Firebase auth hook"
