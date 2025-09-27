@@ -40,6 +40,19 @@ services:
     options: ["clerk", "none"]
     required: false
     default: "none"
+  
+  - name: "api"
+    category: "api"
+    prompt: "Choose API pattern:"
+    options: ["rest", "trpc", "graphql", "none"]
+    required: false
+    default: "rest"
+    language_requirements: ["typescript"]
+    compatibility_rules:
+      - rule_type: "requires_language"
+        target_service: "trpc"
+        condition: "language == 'typescript'"
+        message: "tRPC requires TypeScript for type safety"
 
 # Predefined service combinations for quick setup
 service_combinations:
@@ -50,7 +63,7 @@ service_combinations:
     tags: ["minimal", "prototype", "starter"]
 
   - name: "Starter Pack"
-    description: "Authentication-enabled app - great for getting started quickly"
+    description: "Authentication-enabled app with REST API - great for getting started quickly"
     recommended: true
     services:
       - category: "auth"
@@ -58,7 +71,45 @@ service_combinations:
         config:
           app_name: "Starter App"
           enable_social_login: true
-    tags: ["starter", "auth", "recommended"]
+      - category: "api"
+        provider: "rest"
+        config:
+          include_openapi: true
+          include_validation: true
+    tags: ["starter", "auth", "rest", "recommended"]
+
+  - name: "Type-Safe Stack"
+    description: "Full type-safety with tRPC and authentication"
+    recommended: true
+    services:
+      - category: "auth"
+        provider: "clerk"
+        config:
+          app_name: "Type-Safe App"
+          enable_social_login: true
+      - category: "api"
+        provider: "trpc"
+        config:
+          include_subscriptions: false
+          include_auth_context: true
+    tags: ["typescript", "trpc", "auth", "type-safe"]
+
+  - name: "GraphQL Pro"
+    description: "GraphQL API with advanced features and authentication"
+    recommended: false
+    services:
+      - category: "auth"
+        provider: "clerk"
+        config:
+          app_name: "GraphQL App"
+          enable_social_login: true
+      - category: "api"
+        provider: "graphql"
+        config:
+          include_subscriptions: true
+          include_codegen: true
+          include_auth_directives: true
+    tags: ["graphql", "auth", "subscriptions", "advanced"]
 
 features:
   - name: "typescript"

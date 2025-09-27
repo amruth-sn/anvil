@@ -123,6 +123,7 @@ impl CompositionEngine {
             ServiceCategory::Payments, 
             ServiceCategory::Database,
             ServiceCategory::AI,
+            ServiceCategory::Api,
             ServiceCategory::Deployment,
             ServiceCategory::Monitoring,
             ServiceCategory::Email,
@@ -149,7 +150,7 @@ impl CompositionEngine {
         let base_config = TemplateConfig::from_file(&base_config_path).await?;
 
         // Validate service selections
-        self.validate_service_selections(&base_config, &services)?;
+        self.validate_service_selections(&base_config, &services).await?;
 
         // Build service dependency injection context
         let service_context = self.build_service_context(&services).await?;
@@ -188,7 +189,7 @@ impl CompositionEngine {
     Validates that selected services are compatible with the base template
     and with each other. Checks dependencies and conflicts.
     */
-    fn validate_service_selections(
+    async fn validate_service_selections(
         &self,
         base_config: &TemplateConfig,
         services: &[ServiceSelection],
@@ -272,6 +273,179 @@ impl CompositionEngine {
             }
         }
 
+        // Enhanced compatibility validation
+        self.validate_service_compatibility(base_config, services).await?;
+
+        Ok(())
+    }
+
+    /*
+    Enhanced compatibility validation that checks language requirements,
+    compatibility rules, and cross-service dependencies.
+    */
+    async fn validate_service_compatibility(
+        &self,
+        base_config: &TemplateConfig,
+        services: &[ServiceSelection],
+    ) -> EngineResult<()> {
+        // Detect project language from base template
+        let project_language = self.detect_project_language(base_config).await?;
+        
+        // Load service configurations for enhanced validation
+        for service in services {
+            let service_config_path = self.shared_services_path
+                .join(format!("{:?}", service.category).to_lowercase())
+                .join(&service.provider)
+                .join("anvil.yaml");
+
+            if service_config_path.exists() {
+                let service_config = crate::config::ServiceConfig::from_file(&service_config_path).await?;
+                
+                // Check language requirements
+                if let Some(language_reqs) = self.get_service_language_requirements(&service_config).await? {
+                    for required_lang in &language_reqs {
+                        if !project_language.contains(required_lang) {
+                            return Err(EngineError::composition_error(format!(
+                                "Service '{}/{}' requires {} but project language is {:?}",
+                                format!("{:?}", service.category).to_lowercase(),
+                                service.provider,
+                                required_lang,
+                                project_language
+                            )));
+                        }
+                    }
+                }
+                
+                // Check compatibility rules from service configuration
+                self.validate_service_rules(&service_config, services, &project_language).await?;
+            }
+        }
+
+        // Check cross-service compatibility
+        self.validate_cross_service_compatibility(services).await?;
+
+        Ok(())
+    }
+
+    /*
+    Detects the primary language(s) of the project from the base template.
+    */
+    async fn detect_project_language(&self, base_config: &TemplateConfig) -> EngineResult<Vec<String>> {
+        let mut languages = Vec::new();
+        
+        // Check template name for language hints
+        if base_config.name.contains("rust") {
+            languages.push("rust".to_string());
+        } else if base_config.name.contains("go") {
+            languages.push("go".to_string());
+        } else if base_config.name.contains("python") {
+            languages.push("python".to_string());
+        } else {
+            // Default to TypeScript for fullstack templates
+            languages.push("typescript".to_string());
+            languages.push("javascript".to_string());
+        }
+        
+        // TODO: Could be enhanced to check actual files in template
+        // for more accurate language detection
+        
+        Ok(languages)
+    }
+    
+    /*
+    Extracts language requirements from service configuration.
+    */
+    async fn get_service_language_requirements(
+        &self,
+        service_config: &crate::config::ServiceConfig,
+    ) -> EngineResult<Option<Vec<String>>> {
+        // For now, we'll check if the service config has language_requirements field
+        // This would need to be added to ServiceConfig struct
+        // TODO: Add language_requirements field to ServiceConfig
+        
+        // Hardcoded rules for known services that require specific languages
+        match service_config.name.as_str() {
+            "trpc-api" => Ok(Some(vec!["typescript".to_string()])),
+            _ => Ok(None),
+        }
+    }
+    
+    /*
+    Validates service-specific compatibility rules.
+    */
+    async fn validate_service_rules(
+        &self,
+        service_config: &crate::config::ServiceConfig,
+        _services: &[ServiceSelection],
+        project_languages: &[String],
+    ) -> EngineResult<()> {
+        // TODO: Implement compatibility rules validation
+        // This would check the compatibility_rules field in service config
+        // For now, implement specific known rules
+        
+        match service_config.name.as_str() {
+            "trpc-api" => {
+                if !project_languages.contains(&"typescript".to_string()) {
+                    return Err(EngineError::composition_error(
+                        "tRPC requires TypeScript for type safety".to_string()
+                    ));
+                }
+            }
+            _ => {}
+        }
+        
+        Ok(())
+    }
+    
+    /*
+    Validates compatibility between different selected services.
+    */
+    async fn validate_cross_service_compatibility(
+        &self,
+        services: &[ServiceSelection],
+    ) -> EngineResult<()> {
+        // Check for known incompatible service combinations
+        let _service_providers: std::collections::HashSet<String> = services
+            .iter()
+            .map(|s| format!("{:?}/{}", s.category, s.provider))
+            .collect();
+        
+        // Example: Check if multiple auth providers are selected
+        let auth_services: Vec<_> = services
+            .iter()
+            .filter(|s| s.category == ServiceCategory::Auth)
+            .collect();
+        
+        if auth_services.len() > 1 {
+            let auth_providers: Vec<_> = auth_services
+                .iter()
+                .map(|s| s.provider.as_str())
+                .collect();
+            return Err(EngineError::composition_error(format!(
+                "Multiple auth providers selected: {:?}. Only one auth provider is allowed.",
+                auth_providers
+            )));
+        }
+        
+        // Example: Check if multiple API patterns are selected
+        let api_services: Vec<_> = services
+            .iter()
+            .filter(|s| s.category == ServiceCategory::Api)
+            .collect();
+        
+        if api_services.len() > 1 {
+            let api_providers: Vec<_> = api_services
+                .iter()
+                .map(|s| s.provider.as_str())
+                .collect();
+            return Err(EngineError::composition_error(format!(
+                "Multiple API patterns selected: {:?}. Only one API pattern is recommended.",
+                api_providers
+            )));
+        }
+        
+        // TODO: Add more cross-service compatibility checks
+        
         Ok(())
     }
 
@@ -328,6 +502,11 @@ impl CompositionEngine {
                     ServiceCategory::AI => {
                         exports.insert("ai_provider".to_string(), Value::String(service.provider.clone()));
                         exports.insert("has_ai".to_string(), Value::Bool(true));
+                    }
+                    ServiceCategory::Api => {
+                        exports.insert("api_pattern".to_string(), Value::String(service.provider.clone()));
+                        exports.insert("has_api".to_string(), Value::Bool(true));
+                        exports.insert("api_type".to_string(), Value::String(service.provider.clone()));
                     }
                     _ => {
                         // Generic exports for other service types
