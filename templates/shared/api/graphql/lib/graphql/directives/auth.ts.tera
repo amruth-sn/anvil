@@ -1,0 +1,54 @@
+{% if api_config_include_auth_directives %}import { mapSchema, getDirective, MapperKind } from '@graphql-tools/utils';
+import { GraphQLSchema, GraphQLError, defaultFieldResolver } from 'graphql';
+
+export function authDirectiveTransformer(schema: GraphQLSchema): GraphQLSchema {
+  return mapSchema(schema, {
+    [MapperKind.OBJECT_FIELD]: (fieldConfig, _fieldName, typeName) => {
+      // Check for @auth directive
+      const authDirective = getDirective(schema, fieldConfig, 'auth')?.[0];
+      const requireRoleDirective = getDirective(schema, fieldConfig, 'requireRole')?.[0];
+      
+      if (authDirective || requireRoleDirective) {
+        const { resolve = defaultFieldResolver } = fieldConfig;
+        
+        fieldConfig.resolve = async function (source, args, context, info) {
+          // Check authentication
+          if (!context.user) {
+            throw new GraphQLError('Authentication required', {
+              extensions: {
+                code: 'UNAUTHENTICATED',
+                http: { status: 401 },
+              },
+            });
+          }
+          
+          // Check role requirement
+          if (requireRoleDirective) {
+            const requiredRole = requireRoleDirective.role;
+            const userRole = context.user.role;
+            
+            if (!userRole || userRole !== requiredRole) {
+              throw new GraphQLError(`Role ${requiredRole} required`, {
+                extensions: {
+                  code: 'FORBIDDEN',
+                  http: { status: 403 },
+                },
+              });
+            }
+          }
+          
+          return resolve(source, args, context, info);
+        };
+        
+        return fieldConfig;
+      }
+      
+      return fieldConfig;
+    },
+  });
+}{% else %}import { GraphQLSchema } from 'graphql';
+
+// Auth directives are not enabled
+export function authDirectiveTransformer(schema: GraphQLSchema): GraphQLSchema {
+  return schema;
+}{% endif %}

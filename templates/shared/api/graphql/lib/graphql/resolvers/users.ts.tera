@@ -1,0 +1,228 @@
+import { GraphQLError } from 'graphql';
+{% if api_config_include_subscriptions %}import { pubsub } from './index';
+import { withFilter } from 'graphql-subscriptions';{% endif %}
+
+// Mock users data - replace with your actual database
+const users = [
+  {
+    id: '1',
+    name: 'John Doe',
+    email: 'john@example.com',
+    createdAt: new Date('2023-01-01'),
+    updatedAt: new Date('2023-01-01'),
+  },
+  {
+    id: '2',
+    name: 'Jane Smith',
+    email: 'jane@example.com',
+    createdAt: new Date('2023-01-02'),
+    updatedAt: new Date('2023-01-02'),
+  },
+];
+
+export const userResolvers = {
+  Query: {
+    users: async (_, { input }, context) => {
+      const { page = 1, limit = 10, search } = input || {};
+      
+      // Filter users based on search
+      let filteredUsers = [...users];
+      if (search) {
+        filteredUsers = users.filter(user => 
+          user.name.toLowerCase().includes(search.toLowerCase()) ||
+          user.email.toLowerCase().includes(search.toLowerCase())
+        );
+      }
+      
+      // Calculate pagination
+      const total = filteredUsers.length;
+      const totalPages = Math.ceil(total / limit);
+      const offset = (page - 1) * limit;
+      const paginatedUsers = filteredUsers.slice(offset, offset + limit);
+      
+      return {
+        users: paginatedUsers,
+        pageInfo: {
+          page,
+          limit,
+          total,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPreviousPage: page > 1,
+        },
+      };
+    },
+
+    user: async (_, { id }, context) => {
+      const user = users.find(u => u.id === id);
+      
+      if (!user) {
+        throw new GraphQLError(`User with ID ${id} not found`, {
+          extensions: {
+            code: 'USER_NOT_FOUND',
+            http: { status: 404 },
+          },
+        });
+      }
+      
+      return user;
+    },
+  },
+
+  Mutation: {
+    createUser: async (_, { input }, context) => {
+      {% if api_config_include_auth_directives %}// Check if user is authenticated (handled by @auth directive)
+      if (!context.user) {
+        throw new GraphQLError('Authentication required', {
+          extensions: {
+            code: 'UNAUTHENTICATED',
+            http: { status: 401 },
+          },
+        });
+      }{% endif %}
+
+      const { name, email } = input;
+      
+      // Check if email already exists
+      const existingUser = users.find(u => u.email === email);
+      if (existingUser) {
+        throw new GraphQLError('User with this email already exists', {
+          extensions: {
+            code: 'EMAIL_ALREADY_EXISTS',
+            http: { status: 400 },
+          },
+        });
+      }
+      
+      // Create new user
+      const newUser = {
+        id: Math.random().toString(36).substr(2, 9),
+        name,
+        email,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      
+      users.push(newUser);
+      
+      {% if api_config_include_subscriptions %}// Publish subscription event
+      pubsub.publish('USER_EVENTS', {
+        userEvents: {
+          type: 'CREATED',
+          user: newUser,
+        },
+      });{% endif %}
+      
+      return {
+        success: true,
+        user: newUser,
+        message: 'User created successfully',
+      };
+    },
+
+    updateUser: async (_, { input }, context) => {
+      {% if api_config_include_auth_directives %}// Check if user is authenticated (handled by @auth directive)
+      if (!context.user) {
+        throw new GraphQLError('Authentication required', {
+          extensions: {
+            code: 'UNAUTHENTICATED',
+            http: { status: 401 },
+          },
+        });
+      }{% endif %}
+
+      const { id, name, email } = input;
+      
+      const userIndex = users.findIndex(u => u.id === id);
+      if (userIndex === -1) {
+        throw new GraphQLError(`User with ID ${id} not found`, {
+          extensions: {
+            code: 'USER_NOT_FOUND',
+            http: { status: 404 },
+          },
+        });
+      }
+      
+      // Check if email is being changed and already exists
+      if (email && email !== users[userIndex].email) {
+        const existingUser = users.find(u => u.email === email && u.id !== id);
+        if (existingUser) {
+          throw new GraphQLError('User with this email already exists', {
+            extensions: {
+              code: 'EMAIL_ALREADY_EXISTS',
+              http: { status: 400 },
+            },
+          });
+        }
+      }
+      
+      // Update user
+      const updatedUser = {
+        ...users[userIndex],
+        ...(name && { name }),
+        ...(email && { email }),
+        updatedAt: new Date(),
+      };
+      
+      users[userIndex] = updatedUser;
+      
+      {% if api_config_include_subscriptions %}// Publish subscription event
+      pubsub.publish('USER_EVENTS', {
+        userEvents: {
+          type: 'UPDATED',
+          user: updatedUser,
+        },
+      });{% endif %}
+      
+      return {
+        success: true,
+        user: updatedUser,
+        message: 'User updated successfully',
+      };
+    },
+
+    deleteUser: async (_, { id }, context) => {
+      {% if api_config_include_auth_directives %}// Check if user has admin role (handled by @requireRole directive)
+      if (!context.user || context.user.role !== 'admin') {
+        throw new GraphQLError('Admin role required', {
+          extensions: {
+            code: 'FORBIDDEN',
+            http: { status: 403 },
+          },
+        });
+      }{% endif %}
+
+      const userIndex = users.findIndex(u => u.id === id);
+      if (userIndex === -1) {
+        throw new GraphQLError(`User with ID ${id} not found`, {
+          extensions: {
+            code: 'USER_NOT_FOUND',
+            http: { status: 404 },
+          },
+        });
+      }
+      
+      // Remove user
+      users.splice(userIndex, 1);
+      
+      {% if api_config_include_subscriptions %}// Publish subscription event
+      pubsub.publish('USER_EVENTS', {
+        userEvents: {
+          type: 'DELETED',
+          userId: id,
+        },
+      });{% endif %}
+      
+      return {
+        success: true,
+        message: `User ${id} deleted successfully`,
+      };
+    },
+  },
+
+  {% if api_config_include_subscriptions %}Subscription: {
+    userEvents: {
+      subscribe: () => pubsub.asyncIterator(['USER_EVENTS']),
+    },
+  },{% endif %}
+};

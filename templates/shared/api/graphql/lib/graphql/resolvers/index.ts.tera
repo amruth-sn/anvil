@@ -1,0 +1,25 @@
+import { DateTimeResolver } from 'graphql-scalars';
+import { userResolvers } from './users';
+{% if api_config_include_subscriptions %}import { PubSub } from 'graphql-subscriptions';
+
+// Create PubSub instance for subscriptions
+export const pubsub = new PubSub();{% endif %}
+
+export const resolvers = {
+  // Custom scalars
+  DateTime: DateTimeResolver,
+  {% if api_config_include_subscriptions %}JSON: import('graphql-scalars').then(m => m.JSONResolver),{% endif %}
+
+  Query: {
+    ...userResolvers.Query,
+    health: () => 'GraphQL API is running!',
+  },
+
+  Mutation: {
+    ...userResolvers.Mutation,
+  },
+
+  {% if api_config_include_subscriptions %}Subscription: {
+    ...userResolvers.Subscription,
+  },{% endif %}
+};

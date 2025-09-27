@@ -1,0 +1,112 @@
+import { gql } from 'graphql-tag';
+{% if api_config_include_subscriptions %}import { DateTimeResolver } from 'graphql-scalars';{% endif %}
+
+export const typeDefs = gql`
+  # Custom scalars
+  scalar DateTime
+  {% if api_config_include_subscriptions %}scalar JSON{% endif %}
+
+  {% if api_config_include_auth_directives %}# Authentication directives
+  directive @auth on FIELD_DEFINITION
+  directive @requireRole(role: String!) on FIELD_DEFINITION{% endif %}
+
+  # User types
+  type User {
+    id: ID!
+    name: String!
+    email: String!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+  }
+
+  input CreateUserInput {
+    name: String!
+    email: String!
+  }
+
+  input UpdateUserInput {
+    id: ID!
+    name: String
+    email: String
+  }
+
+  input GetUsersInput {
+    page: Int = 1
+    limit: Int = 10
+    search: String
+  }
+
+  # Pagination types
+  type PageInfo {
+    page: Int!
+    limit: Int!
+    total: Int!
+    totalPages: Int!
+    hasNextPage: Boolean!
+    hasPreviousPage: Boolean!
+  }
+
+  type UsersConnection {
+    users: [User!]!
+    pageInfo: PageInfo!
+  }
+
+  # Response types
+  type CreateUserResponse {
+    success: Boolean!
+    user: User
+    message: String
+  }
+
+  type UpdateUserResponse {
+    success: Boolean!
+    user: User
+    message: String
+  }
+
+  type DeleteUserResponse {
+    success: Boolean!
+    message: String
+  }
+
+  {% if api_config_include_subscriptions %}# Subscription types
+  enum UserEventType {
+    CREATED
+    UPDATED
+    DELETED
+  }
+
+  type UserEvent {
+    type: UserEventType!
+    user: User
+    userId: ID
+  }{% endif %}
+
+  # Root types
+  type Query {
+    # Get all users with pagination
+    users(input: GetUsersInput): UsersConnection!
+    
+    # Get user by ID
+    user(id: ID!): User
+    
+    # Health check
+    health: String!
+  }
+
+  type Mutation {
+    # Create a new user
+    createUser(input: CreateUserInput!): CreateUserResponse!{% if api_config_include_auth_directives %} @auth{% endif %}
+    
+    # Update an existing user
+    updateUser(input: UpdateUserInput!): UpdateUserResponse!{% if api_config_include_auth_directives %} @auth{% endif %}
+    
+    # Delete a user
+    deleteUser(id: ID!): DeleteUserResponse!{% if api_config_include_auth_directives %} @requireRole(role: "admin"){% endif %}
+  }
+
+  {% if api_config_include_subscriptions %}type Subscription {
+    # Subscribe to user changes
+    userEvents: UserEvent!
+  }{% endif %}
+`;
