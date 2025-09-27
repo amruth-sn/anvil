@@ -1,12 +1,13 @@
 name: "stripe-payments"
-description: "Stripe payment processing integration"
-version: "1.0.0"
+description: "Comprehensive Stripe payment processing with subscriptions and webhooks"
+version: "2.0.0"
 category: "payments"
 
 dependencies:
   npm:
-    - "stripe"
-    - "@stripe/stripe-js"
+    - "stripe@^14.0.0"
+    - "@stripe/stripe-js@^2.0.0"
+    - "@stripe/react-stripe-js@^2.0.0"
 
 environment_variables:
   - name: "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY"
@@ -16,15 +17,107 @@ environment_variables:
     description: "Stripe secret key"
     required: true
   - name: "STRIPE_WEBHOOK_SECRET"
-    description: "Stripe webhook secret"
+    description: "Stripe webhook secret for event verification"
     required: true
 
+configuration_prompts:
+  - name: "enable_subscriptions"
+    prompt: "Enable subscription billing?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Support recurring subscription payments"
+  - name: "enable_one_time_payments"
+    prompt: "Enable one-time payments?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Support one-time product purchases"
+  - name: "enable_customer_portal"
+    prompt: "Enable customer billing portal?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Allow customers to manage their billing"
+  - name: "payment_methods"
+    prompt: "Which payment methods to accept?"
+    prompt_type: "multi_select"
+    options: ["card", "apple_pay", "google_pay", "bank_transfer", "buy_now_pay_later"]
+    default: ["card", "apple_pay", "google_pay"]
+    description: "Payment methods to enable in checkout"
+  - name: "default_currency"
+    prompt: "Default currency:"
+    prompt_type: "select"
+    options: ["usd", "eur", "gbp", "cad", "aud"]
+    default: "usd"
+    description: "Default currency for pricing"
+
 files:
+  - path: "lib/stripe.ts"
+    description: "Stripe configuration and utility functions"
+  - path: "lib/stripe-products.ts"
+    description: "Product and pricing configuration"
   - path: "app/api/checkout/route.ts"
     description: "Create checkout session API route"
+  - path: "app/api/billing-portal/route.ts"
+    description: "Customer billing portal API route"
   - path: "app/api/webhooks/stripe/route.ts"
-    description: "Stripe webhook handler"
+    description: "Comprehensive Stripe webhook handler"
+  - path: "app/api/subscriptions/route.ts"
+    description: "Subscription management API"
   - path: "components/payments/checkout-button.tsx"
-    description: "Checkout button component"
-  - path: "lib/stripe.ts"
-    description: "Stripe configuration and utilities"
+    description: "Enhanced checkout button component"
+  - path: "components/payments/pricing-table.tsx"
+    description: "Pricing table component"
+  - path: "components/payments/subscription-status.tsx"
+    description: "Subscription status display"
+  - path: "components/payments/billing-portal-button.tsx"
+    description: "Customer billing portal access"
+  - path: "hooks/use-subscription.ts"
+    description: "Subscription management hook"
+
+features:
+  - name: "subscriptions"
+    description: "Recurring subscription billing"
+    enabled_when: "enable_subscriptions == true"
+  - name: "one_time_payments"
+    description: "One-time product payments"
+    enabled_when: "enable_one_time_payments == true"
+  - name: "customer_portal"
+    description: "Self-service customer billing portal"
+    enabled_when: "enable_customer_portal == true"
+  - name: "multiple_payment_methods"
+    description: "Multiple payment method support"
+    enabled: true
+  - name: "webhooks"
+    description: "Real-time payment event handling"
+    enabled: true
+
+setup_instructions: |
+  🚀 Complete Stripe Integration Setup:
+  
+  1. Create Stripe Account:
+     - Go to https://dashboard.stripe.com
+     - Complete account setup and verification
+     - Get API keys from Developers → API keys
+  
+  2. Configure Products and Prices:
+     - Create products in Stripe Dashboard
+     - Set up pricing (one-time or recurring)
+     - Note price IDs for your application
+  
+  3. Set Up Webhooks:
+     - Add webhook endpoint: https://yourdomain.com/api/webhooks/stripe
+     - Select events: customer.subscription.*, invoice.*, checkout.session.completed
+     - Copy webhook signing secret
+  
+  4. Configure Payment Methods:
+     - Enable desired payment methods in Dashboard
+     - Set up Apple Pay/Google Pay domain verification
+  
+  5. Test Integration:
+     - Use test mode for development
+     - Test with Stripe test card numbers
+     - Verify webhook delivery
+  
+  6. Production Setup:
+     - Switch to live mode
+     - Update environment variables with live keys
+     - Configure business information

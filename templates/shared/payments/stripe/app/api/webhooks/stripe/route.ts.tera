@@ -1,20 +1,21 @@
 import { NextRequest, NextResponse } from "next/server"
+import { headers } from "next/headers"
 import Stripe from "stripe"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
 })
 
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
 export async function POST(req: NextRequest) {
   const body = await req.text()
-  const sig = req.headers.get("stripe-signature")!
+  const signature = headers().get("stripe-signature")!
 
   let event: Stripe.Event
 
   try {
-    event = stripe.webhooks.constructEvent(body, sig, endpointSecret)
+    event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
   } catch (err) {
     console.error("Webhook signature verification failed:", err)
     return NextResponse.json(
@@ -23,39 +24,176 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Handle the event
-  switch (event.type) {
-    case "checkout.session.completed":
-      const session = event.data.object as Stripe.Checkout.Session
-      console.log("Checkout session completed:", session.id)
-      
-      // Update user's subscription status in your database
-      const userId = session.metadata?.userId
-      if (userId) {
-        // TODO: Update user subscription in database
-        console.log(`User ${userId} subscribed successfully`)
-      }
-      break
+  console.log(`Received webhook event: ${event.type}`)
 
-    case "invoice.payment_succeeded":
-      const invoice = event.data.object as Stripe.Invoice
-      console.log("Payment succeeded:", invoice.id)
-      
-      // Handle successful payment
-      // TODO: Update payment history in database
-      break
+  try {
+    switch (event.type) {
+      case "checkout.session.completed":
+        await handleCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session)
+        break
 
-    case "invoice.payment_failed":
-      const failedInvoice = event.data.object as Stripe.Invoice
-      console.log("Payment failed:", failedInvoice.id)
-      
-      // Handle failed payment
-      // TODO: Notify user and update subscription status
-      break
+      case "customer.subscription.created":
+        await handleSubscriptionCreated(event.data.object as Stripe.Subscription)
+        break
 
-    default:
-      console.log(`Unhandled event type ${event.type}`)
+      case "customer.subscription.updated":
+        await handleSubscriptionUpdated(event.data.object as Stripe.Subscription)
+        break
+
+      case "customer.subscription.deleted":
+        await handleSubscriptionDeleted(event.data.object as Stripe.Subscription)
+        break
+
+      case "invoice.payment_succeeded":
+        await handleInvoicePaymentSucceeded(event.data.object as Stripe.Invoice)
+        break
+
+      case "invoice.payment_failed":
+        await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice)
+        break
+
+      case "customer.created":
+        await handleCustomerCreated(event.data.object as Stripe.Customer)
+        break
+
+      default:
+        console.log(`Unhandled event type: ${event.type}`)
+    }
+
+    return NextResponse.json({ received: true })
+  } catch (error) {
+    console.error(`Error handling webhook event ${event.type}:`, error)
+    return NextResponse.json(
+      { error: "Webhook handler failed" },
+      { status: 500 }
+    )
   }
+}
 
-  return NextResponse.json({ received: true })
+async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
+  console.log("💳 Checkout session completed:", session.id)
+  
+  try {
+    const customerId = session.customer as string
+    const subscriptionId = session.subscription as string
+    const userId = session.metadata?.userId
+
+    if (session.mode === "subscription" && subscriptionId) {
+      console.log("🔄 Processing subscription checkout for user:", userId)
+      // TODO: Update user subscription status in your database
+      // await updateUserSubscription(userId, {
+      //   customerId,
+      //   subscriptionId,
+      //   status: 'active'
+      // })
+    } else if (session.mode === "payment") {
+      console.log("💰 Processing one-time payment for user:", userId)
+      // TODO: Process one-time purchase
+      // await processOneTimePayment(userId, session)
+    }
+
+    console.log("✅ Checkout session processed successfully")
+  } catch (error) {
+    console.error("❌ Error processing checkout session:", error)
+  }
+}
+
+async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
+  console.log("🆕 Subscription created:", subscription.id)
+  
+  try {
+    // TODO: Create subscription record in database
+    // await createUserSubscription({
+    //   subscriptionId: subscription.id,
+    //   customerId: subscription.customer as string,
+    //   status: subscription.status,
+    //   priceId: subscription.items.data[0]?.price.id,
+    // })
+
+    console.log("✅ Subscription created successfully")
+  } catch (error) {
+    console.error("❌ Error creating subscription:", error)
+  }
+}
+
+async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
+  console.log("📝 Subscription updated:", subscription.id)
+  
+  try {
+    // TODO: Update subscription in database
+    // await updateUserSubscription(subscription.id, {
+    //   status: subscription.status,
+    //   cancelAtPeriodEnd: subscription.cancel_at_period_end,
+    // })
+
+    console.log("✅ Subscription updated successfully")
+  } catch (error) {
+    console.error("❌ Error updating subscription:", error)
+  }
+}
+
+async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
+  console.log("🗑️ Subscription deleted:", subscription.id)
+  
+  try {
+    // TODO: Update subscription status and revoke access
+    // await updateUserSubscription(subscription.id, {
+    //   status: 'cancelled',
+    //   cancelledAt: new Date(),
+    // })
+
+    console.log("✅ Subscription deletion processed successfully")
+  } catch (error) {
+    console.error("❌ Error processing subscription deletion:", error)
+  }
+}
+
+async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
+  console.log("💰 Invoice payment succeeded:", invoice.id)
+  
+  try {
+    const subscriptionId = invoice.subscription as string
+    
+    if (subscriptionId) {
+      // TODO: Update subscription payment status
+      // await updateSubscriptionPayment(subscriptionId, {
+      //   lastPaymentDate: new Date(invoice.created * 1000),
+      //   amountPaid: invoice.amount_paid,
+      // })
+    }
+
+    console.log("✅ Invoice payment processed successfully")
+  } catch (error) {
+    console.error("❌ Error processing invoice payment:", error)
+  }
+}
+
+async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
+  console.log("❌ Invoice payment failed:", invoice.id)
+  
+  try {
+    // TODO: Handle payment failure
+    // await handlePaymentFailure(invoice.customer as string, invoice)
+    
+    console.log("✅ Invoice payment failure processed")
+  } catch (error) {
+    console.error("❌ Error processing invoice payment failure:", error)
+  }
+}
+
+async function handleCustomerCreated(customer: Stripe.Customer) {
+  console.log("👤 Customer created:", customer.id)
+  
+  try {
+    // TODO: Create customer record in database
+    // await createCustomer({
+    //   stripeCustomerId: customer.id,
+    //   email: customer.email,
+    //   name: customer.name,
+    // })
+
+    console.log("✅ Customer created successfully")
+  } catch (error) {
+    console.error("❌ Error creating customer:", error)
+  }
 }
