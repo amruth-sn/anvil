@@ -1,0 +1,47 @@
+name: "claude-ai"
+description: "Anthropic Claude AI integration with streaming and function calling"
+version: "2.0.0"
+category: "ai"
+
+dependencies:
+  npm:
+    - "@anthropic-ai/sdk@^0.20.0"
+    - "ai@^2.2.0"
+
+environment_variables:
+  - name: "ANTHROPIC_API_KEY"
+    description: "Anthropic API key for Claude"
+    required: true
+
+configuration_prompts:
+  - name: "default_model"
+    prompt: "Default Claude model:"
+    prompt_type: "select"
+    options: ["claude-3-5-sonnet-20241022", "claude-3-haiku-20240307", "claude-3-opus-20240229"]
+    default: "claude-3-5-sonnet-20241022"
+    description: "Default Claude model for completions"
+  - name: "enable_streaming"
+    prompt: "Enable streaming responses?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Stream responses for better user experience"
+  - name: "max_tokens"
+    prompt: "Maximum tokens per response:"
+    prompt_type: "select"
+    options: ["1000", "2000", "4000", "8000"]
+    default: "4000"
+    description: "Maximum tokens for Claude responses"
+
+files:
+  - path: "lib/claude.ts"
+    description: "Claude client configuration"
+  - path: "app/api/chat/claude/route.ts"
+    description: "Claude chat API with streaming"
+  - path: "components/ai/claude-chat.tsx"
+    description: "Claude-specific chat interface"
+
+setup_instructions: |
+  🚀 Claude AI Setup:
+  1. Get API key from https://console.anthropic.com
+  2. Add ANTHROPIC_API_KEY to environment variables
+  3. Configure usage limits and monitoring

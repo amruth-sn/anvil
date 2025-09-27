@@ -1,22 +1,106 @@
 name: "openai-integration"
-description: "OpenAI API integration for chat and completions"
-version: "1.0.0"
+description: "Comprehensive OpenAI API integration with streaming, function calling, and image generation"
+version: "2.0.0"
 category: "ai"
 
 dependencies:
   npm:
-    - "openai"
-    - "ai"
+    - "openai@^4.20.0"
+    - "ai@^2.2.0"
+    - "@ai-sdk/openai@^0.0.5"
 
 environment_variables:
   - name: "OPENAI_API_KEY"
     description: "OpenAI API key"
     required: true
 
+configuration_prompts:
+  - name: "default_model"
+    prompt: "Default OpenAI model:"
+    prompt_type: "select"
+    options: ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"]
+    default: "gpt-4"
+    description: "Default model for chat completions"
+  - name: "enable_streaming"
+    prompt: "Enable streaming responses?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Stream responses for better user experience"
+  - name: "enable_function_calling"
+    prompt: "Enable function calling?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Allow AI to call functions and access tools"
+  - name: "enable_image_generation"
+    prompt: "Enable DALL-E image generation?"
+    prompt_type: "boolean"
+    default: "false"
+    description: "Include image generation capabilities"
+  - name: "max_tokens"
+    prompt: "Maximum tokens per response:"
+    prompt_type: "select"
+    options: ["1000", "2000", "4000", "8000"]
+    default: "2000"
+    description: "Maximum tokens for AI responses"
+
 files:
-  - path: "app/api/chat/route.ts"
-    description: "OpenAI chat completion API route"
-  - path: "components/ai/chat.tsx"
-    description: "Chat interface component"
   - path: "lib/openai.ts"
-    description: "OpenAI client configuration"
+    description: "OpenAI client configuration and utilities"
+  - path: "app/api/chat/route.ts"
+    description: "Streaming chat API with function calling"
+  - path: "app/api/images/generate/route.ts"
+    description: "DALL-E image generation API"
+  - path: "components/ai/chat-interface.tsx"
+    description: "Advanced chat interface with streaming"
+  - path: "components/ai/message-list.tsx"
+    description: "Chat message display component"
+  - path: "components/ai/function-display.tsx"
+    description: "Function calling results display"
+  - path: "components/ai/image-generator.tsx"
+    description: "Image generation interface"
+  - path: "hooks/use-chat.ts"
+    description: "Chat management hook with streaming"
+  - path: "lib/ai-functions.ts"
+    description: "Function definitions for AI function calling"
+
+features:
+  - name: "streaming_chat"
+    description: "Real-time streaming chat responses"
+    enabled_when: "enable_streaming == true"
+  - name: "function_calling"
+    description: "AI function calling and tool usage"
+    enabled_when: "enable_function_calling == true"
+  - name: "image_generation"
+    description: "DALL-E powered image generation"
+    enabled_when: "enable_image_generation == true"
+  - name: "conversation_memory"
+    description: "Persistent conversation history"
+    enabled: true
+
+setup_instructions: |
+  🚀 Complete OpenAI Integration Setup:
+  
+  1. Get OpenAI API Key:
+     - Go to https://platform.openai.com/api-keys
+     - Create new API key
+     - Add to environment variables
+  
+  2. Set Usage Limits:
+     - Configure usage limits in OpenAI dashboard
+     - Set up billing alerts
+     - Monitor usage and costs
+  
+  3. Configure Models:
+     - Choose appropriate models for your use case
+     - Consider cost vs. performance tradeoffs
+     - Test with different models
+  
+  4. Function Calling Setup (if enabled):
+     - Define functions in lib/ai-functions.ts
+     - Test function calling thoroughly
+     - Handle function errors gracefully
+  
+  5. Image Generation (if enabled):
+     - Set up image storage (S3, Cloudinary, etc.)
+     - Configure content moderation
+     - Set appropriate usage limits
