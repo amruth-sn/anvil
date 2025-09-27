@@ -118,6 +118,12 @@ pub struct ServiceDefinition {
     pub dependencies: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conflicts: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language_requirements: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub platform_requirements: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compatibility_rules: Option<Vec<CompatibilityRule>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -127,6 +133,7 @@ pub enum ServiceCategory {
     Payments,
     Database,
     AI,
+    Api,
     Deployment,
     Monitoring,
     Email,
@@ -242,6 +249,24 @@ pub struct ConditionalFile {
     pub condition: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_service: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompatibilityRule {
+    pub rule_type: CompatibilityRuleType,
+    pub target_service: String,
+    pub condition: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CompatibilityRuleType {
+    Requires,
+    ConflictsWith,
+    RecommendsAgainst,
+    RequiresLanguage,
+    RequiresPlatform,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
