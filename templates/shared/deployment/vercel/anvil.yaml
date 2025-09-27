@@ -1,10 +1,39 @@
 name: "vercel-deployment"
-description: "Vercel deployment configuration"
-version: "1.0.0"
+description: "Comprehensive Vercel deployment with analytics and optimization"
+version: "2.0.0"
 category: "deployment"
+
+dependencies:
+  npm:
+    - "vercel@latest"
+
+configuration_prompts:
+  - name: "enable_analytics"
+    prompt: "Enable Vercel Analytics?"
+    prompt_type: "boolean"
+    default: "true"
+  - name: "enable_speed_insights"
+    prompt: "Enable Speed Insights?"
+    prompt_type: "boolean"
+    default: "true"
+  - name: "deployment_regions"
+    prompt: "Primary deployment region:"
+    prompt_type: "select"
+    options: ["iad1", "sfo1", "fra1", "sin1", "hnd1"]
+    default: "iad1"
 
 files:
   - path: "vercel.json"
-    description: "Vercel deployment configuration"
-  - path: ".env.example"
-    description: "Environment variables template"
+    description: "Optimized Vercel deployment configuration"
+  - path: ".vercelignore"
+    description: "Files to ignore during deployment"
+  - path: "scripts/deploy.sh"
+    description: "Deployment automation script"
+
+setup_instructions: |
+  🚀 Vercel Deployment Setup:
+  1. Install Vercel CLI: npm i -g vercel
+  2. Login: vercel login
+  3. Deploy: vercel --prod
+  4. Configure environment variables in dashboard
+  5. Set up custom domains and SSL
