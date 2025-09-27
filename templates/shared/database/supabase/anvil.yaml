@@ -1,0 +1,44 @@
+name: "supabase-database"
+description: "Supabase PostgreSQL database with real-time features and RLS"
+version: "2.0.0"
+category: "database"
+
+dependencies:
+  npm:
+    - "@supabase/supabase-js@^2.39.0"
+
+environment_variables:
+  - name: "NEXT_PUBLIC_SUPABASE_URL"
+    description: "Supabase project URL"
+    required: true
+  - name: "NEXT_PUBLIC_SUPABASE_ANON_KEY"
+    description: "Supabase anonymous key"
+    required: true
+  - name: "SUPABASE_SERVICE_ROLE_KEY"
+    description: "Supabase service role key"
+    required: false
+
+configuration_prompts:
+  - name: "enable_realtime"
+    prompt: "Enable real-time subscriptions?"
+    prompt_type: "boolean"
+    default: "true"
+  - name: "enable_rls"
+    prompt: "Set up Row Level Security?"
+    prompt_type: "boolean"
+    default: "true"
+
+files:
+  - path: "lib/supabase-db.ts"
+    description: "Supabase database client"
+  - path: "lib/database-types.ts"
+    description: "TypeScript database types"
+  - path: "sql/schema.sql"
+    description: "Database schema and RLS policies"
+
+setup_instructions: |
+  🚀 Supabase Database Setup:
+  1. Create Supabase project at https://app.supabase.com
+  2. Copy URL and keys to environment variables
+  3. Run schema.sql in SQL editor
+  4. Set up RLS policies for security
