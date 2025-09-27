@@ -1,23 +1,77 @@
 name: "neon-database"
-description: "Neon PostgreSQL database integration"
-version: "1.0.0"
+description: "Neon PostgreSQL database with Drizzle ORM and migrations"
+version: "2.0.0"
 category: "database"
 
 dependencies:
   npm:
-    - "@neondatabase/serverless"
-    - "drizzle-orm"
-    - "drizzle-kit"
+    - "@neondatabase/serverless@^0.9.0"
+    - "drizzle-orm@^0.29.0"
+    - "drizzle-kit@^0.20.0"
+    - "@types/pg@^8.10.0"
 
 environment_variables:
   - name: "DATABASE_URL"
     description: "Neon database connection string"
     required: true
+  - name: "POSTGRES_PRISMA_URL"
+    description: "Neon connection string for Prisma (if used)"
+    required: false
+
+configuration_prompts:
+  - name: "enable_pooling"
+    prompt: "Enable connection pooling?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Use connection pooling for better performance"
+  - name: "enable_migrations"
+    prompt: "Set up database migrations?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Include migration setup and scripts"
+  - name: "include_auth_tables"
+    prompt: "Include authentication tables?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Add user and session tables for auth"
 
 files:
-  - path: "lib/db.ts"
-    description: "Database connection and configuration"
-  - path: "lib/schema.ts"
-    description: "Database schema definitions"
   - path: "drizzle.config.ts"
-    description: "Drizzle ORM configuration"
+    description: "Drizzle Kit configuration for migrations"
+  - path: "lib/db.ts"
+    description: "Database connection with Neon serverless"
+  - path: "lib/schema.ts"
+    description: "Comprehensive database schema"
+  - path: "lib/migrations/0001_initial.sql"
+    description: "Initial database migration"
+  - path: "lib/queries/users.ts"
+    description: "User-related database queries"
+
+features:
+  - name: "connection_pooling"
+    description: "Optimized connection pooling"
+    enabled_when: "enable_pooling == true"
+  - name: "migrations"
+    description: "Database migration system"
+    enabled_when: "enable_migrations == true"
+  - name: "auth_tables"
+    description: "Authentication and user management tables"
+    enabled_when: "include_auth_tables == true"
+
+setup_instructions: |
+  🚀 Neon Database Setup:
+  
+  1. Create Neon Project:
+     - Go to https://console.neon.tech
+     - Create new project and database
+     - Copy connection string to DATABASE_URL
+  
+  2. Run Migrations:
+     - npm run db:generate (generate migrations)
+     - npm run db:migrate (run migrations)
+     - npm run db:studio (open Drizzle Studio)
+  
+  3. Production Setup:
+     - Use connection pooling for production
+     - Configure backup retention
+     - Set up read replicas if needed
