@@ -1,0 +1,201 @@
+{% if api_config_include_openapi %}import { NextRequest, NextResponse } from 'next/server';
+import { openApiSpec } from '@/lib/api/openapi';
+
+// GET /api/docs - Serve OpenAPI documentation
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const format = searchParams.get('format') || 'html';
+
+  if (format === 'json') {
+    return NextResponse.json(openApiSpec);
+  }
+
+  // Serve Swagger UI HTML
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ project_name | default(value="API") }} Documentation</title>
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.10.3/swagger-ui.css" />
+  <style>
+    html {
+      box-sizing: border-box;
+      overflow: -moz-scrollbars-vertical;
+      overflow-y: scroll;
+    }
+    *, *:before, *:after {
+      box-sizing: inherit;
+    }
+    body {
+      margin:0;
+      background: #fafafa;
+    }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5.10.3/swagger-ui-bundle.js"></script>
+  <script src="https://unpkg.com/swagger-ui-dist@5.10.3/swagger-ui-standalone-preset.js"></script>
+  <script>
+    window.onload = function() {
+      const ui = SwaggerUIBundle({
+        url: '/api/docs?format=json',
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        plugins: [
+          SwaggerUIBundle.plugins.DownloadUrl
+        ],
+        layout: "StandaloneLayout",
+        tryItOutEnabled: true,
+        requestInterceptor: (request) => {
+          // Add any auth headers or modify requests here
+          return request;
+        },
+        responseInterceptor: (response) => {
+          // Handle responses here
+          return response;
+        }
+      });
+    };
+  </script>
+</body>
+</html>`;
+
+  return new NextResponse(html, {
+    headers: {
+      'Content-Type': 'text/html',
+    },
+  });
+}{% else %}import { NextRequest, NextResponse } from 'next/server';
+
+// GET /api/docs - API documentation placeholder
+export async function GET(request: NextRequest) {
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ project_name | default(value="API") }} Documentation</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2rem;
+      background: #f8f9fa;
+    }
+    .container {
+      background: white;
+      border-radius: 8px;
+      padding: 2rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #2563eb;
+      border-bottom: 2px solid #e5e7eb;
+      padding-bottom: 1rem;
+    }
+    .endpoint {
+      background: #f3f4f6;
+      border-left: 4px solid #2563eb;
+      padding: 1rem;
+      margin: 1rem 0;
+      border-radius: 0 4px 4px 0;
+    }
+    .method {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-weight: bold;
+      margin-right: 0.5rem;
+      color: white;
+      font-size: 0.875rem;
+    }
+    .get { background: #059669; }
+    .post { background: #dc2626; }
+    .put { background: #d97706; }
+    .delete { background: #7c2d12; }
+    code {
+      background: #e5e7eb;
+      padding: 0.125rem 0.25rem;
+      border-radius: 3px;
+      font-family: 'Monaco', 'Consolas', monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>{{ project_name | default(value="API") }} Documentation</h1>
+    
+    <p>Welcome to the {{ project_name | default(value="API") }} REST API documentation.</p>
+    
+    <h2>Base URL</h2>
+    <code>${typeof window !== 'undefined' ? window.location.origin : ''}/api</code>
+    
+    <h2>Endpoints</h2>
+    
+    <div class="endpoint">
+      <span class="method get">GET</span>
+      <strong>/users</strong>
+      <p>Get all users with optional pagination and search.</p>
+    </div>
+    
+    <div class="endpoint">
+      <span class="method post">POST</span>
+      <strong>/users</strong>
+      <p>Create a new user.</p>
+    </div>
+    
+    <div class="endpoint">
+      <span class="method get">GET</span>
+      <strong>/users/{id}</strong>
+      <p>Get a specific user by ID.</p>
+    </div>
+    
+    <div class="endpoint">
+      <span class="method put">PUT</span>
+      <strong>/users/{id}</strong>
+      <p>Update a specific user.</p>
+    </div>
+    
+    <div class="endpoint">
+      <span class="method delete">DELETE</span>
+      <strong>/users/{id}</strong>
+      <p>Delete a specific user.</p>
+    </div>
+    
+    <h2>Response Format</h2>
+    <p>All API responses follow this standard format:</p>
+    <pre><code>{
+  "success": boolean,
+  "data": any,
+  "message": string (optional),
+  "error": string (optional),
+  "pagination": {
+    "page": number,
+    "limit": number,
+    "total": number,
+    "totalPages": number
+  } (optional)
+}</code></pre>
+    
+    <p><em>Note: OpenAPI/Swagger documentation is not enabled. Set <code>include_openapi: true</code> to enable interactive documentation.</em></p>
+  </div>
+</body>
+</html>`;
+
+  return new NextResponse(html, {
+    headers: {
+      'Content-Type': 'text/html',
+    },
+  });
+}{% endif %}
