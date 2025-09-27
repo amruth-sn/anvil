@@ -27,6 +27,9 @@ pub struct TemplateConfig {
     
     #[serde(skip_serializing_if = "Option::is_none")]
     pub composition: Option<CompositionConfig>,
+    
+    #[serde(default)]
+    pub service_combinations: Vec<ServiceCombination>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -145,6 +148,34 @@ pub struct ServiceConfig {
     
     #[serde(default)]
     pub files: Vec<ServiceFile>,
+    
+    #[serde(default)]
+    pub configuration_prompts: Vec<ServicePrompt>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServicePrompt {
+    pub name: String,
+    pub prompt: String,
+    pub prompt_type: ServicePromptType,
+    #[serde(default)]
+    pub required: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub options: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ServicePromptType {
+    Text,
+    Boolean,
+    Select,
+    MultiSelect,
+    Password,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -211,6 +242,25 @@ pub struct ConditionalFile {
     pub condition: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_service: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceCombination {
+    pub name: String,
+    pub description: String,
+    pub services: Vec<ServiceSpec>,
+    #[serde(default)]
+    pub recommended: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceSpec {
+    pub category: ServiceCategory,
+    pub provider: String,
+    #[serde(default)]
+    pub config: std::collections::HashMap<String, serde_json::Value>,
 }
 
 impl TemplateConfig {

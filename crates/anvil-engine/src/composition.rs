@@ -71,6 +71,10 @@ impl CompositionEngine {
         }
     }
     
+    pub fn shared_services_path(&self) -> &PathBuf {
+        &self.shared_services_path
+    }
+    
     /*
     Discovers available service providers for a given category by scanning
     the shared services directory structure.
@@ -334,10 +338,16 @@ impl CompositionEngine {
                     }
                 }
 
+                // Merge service-provided exports with user configuration
+                let mut all_exports = exports;
+                for (key, value) in &service.config {
+                    all_exports.insert(format!("config_{}", key), value.clone());
+                }
+
                 let service_info = ServiceInfo {
                     provider: service.provider.clone(),
                     config: service.config.clone(),
-                    exports,
+                    exports: all_exports,
                 };
 
                 service_context.services.insert(format!("{:?}", service.category), service_info);
@@ -779,7 +789,7 @@ impl CompositionEngine {
     Evaluates a condition string against the current context.
     Supports basic conditions like:
     - "services.auth == 'clerk'"
-    - "services.payments in ['stripe', 'paddle']" 
+    - "services.payments in ['stripe']" 
     - "has_auth && has_payments"
     */
     async fn evaluate_condition(
@@ -842,7 +852,7 @@ impl CompositionEngine {
             }
         }
 
-        // Handle 'in' conditions: "services.payments in ['stripe', 'paddle']"
+        // Handle 'in' conditions: "services.payments in ['stripe']"
         if condition.contains(" in ") {
             let parts: Vec<&str> = condition.split(" in ").collect();
             if parts.len() == 2 {

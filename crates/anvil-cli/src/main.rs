@@ -6,7 +6,8 @@ use serde_yaml;
 
 use anvil_engine::{
     TemplateConfig, TemplateEngine, Context, FileGenerator,
-    CompositionEngine, ServiceSelection, ServiceCategory, ServiceDefinition
+    CompositionEngine, ServiceSelection, ServiceCategory, ServiceDefinition,
+    ServiceCombination, ServiceConfig, ServicePromptType
 };
 
 #[derive(Parser)]
@@ -65,6 +66,10 @@ pub enum Commands {
         
         #[arg(long)]
         deployment: Option<String>,
+        
+        /// Use a predefined service combination
+        #[arg(long, value_name = "COMBINATION")]
+        preset: Option<String>,
     },
     
     List {
@@ -113,6 +118,7 @@ async fn main() -> Result<()> {
             database,
             ai,
             deployment,
+            preset,
         } => {
             create_project(CreateOptions {
                 name,
@@ -129,6 +135,7 @@ async fn main() -> Result<()> {
                 database,
                 ai,
                 deployment,
+                preset,
             }).await?;
         }
         Commands::List { language, format } => {
@@ -159,6 +166,7 @@ struct CreateOptions {
     database: Option<String>,
     ai: Option<String>,
     deployment: Option<String>,
+    preset: Option<String>,
 }
 
 async fn create_project(options: CreateOptions) -> Result<()> {
@@ -463,7 +471,48 @@ async fn collect_service_selections_interactive(
     let shared_dir = templates_dir.join("shared");
     let composition_engine = CompositionEngine::new(templates_dir, shared_dir);
     
-    println!("\n{} Service Configuration", "🔧".bright_blue());
+    // Handle preset selection first
+    if let Some(preset_name) = &options.preset {
+        // Use specific preset from CLI
+        if let Some(combination) = template_config.service_combinations.iter().find(|c| c.name == *preset_name) {
+            println!("{} Using preset: {}", "🎯".bright_magenta(), combination.name.bright_yellow());
+            println!("  {}", combination.description.bright_white());
+            return apply_service_combination(combination, &composition_engine, options).await;
+        } else {
+            return Err(anyhow::anyhow!("Preset '{}' not found in template", preset_name));
+        }
+    } else if !template_config.service_combinations.is_empty() {
+        // Offer preset selection if available
+        println!("\n{} Service Presets Available", "🎯".bright_blue());
+        println!("Choose a preset to quickly configure your project:\n");
+        
+        let mut preset_options = vec!["Custom configuration".to_string()];
+        for combination in &template_config.service_combinations {
+            let name = if combination.recommended {
+                format!("{} (recommended)", combination.name)
+            } else {
+                combination.name.clone()
+            };
+            preset_options.push(name);
+        }
+        
+        let preset_selection = inquire::Select::new("Select a preset:", preset_options)
+            .with_help_message("Use arrow keys to navigate, Enter to select")
+            .prompt()?;
+        
+        if preset_selection != "Custom configuration" {
+            // Find the selected combination (remove "(recommended)" suffix if present)
+            let combo_name = preset_selection.replace(" (recommended)", "");
+            if let Some(combination) = template_config.service_combinations.iter().find(|c| c.name == combo_name) {
+                println!("\n{} Selected preset: {}", "✅".bright_green(), combination.name.bright_yellow());
+                println!("  {}", combination.description);
+                return apply_service_combination(combination, &composition_engine, options).await;
+            }
+        }
+    }
+    
+    // Custom configuration flow
+    println!("\n{} Custom Service Configuration", "🔧".bright_blue());
     println!("Configure services for your project (press Enter for default):\n");
     
     // Prompt for each service defined in the template
@@ -472,10 +521,19 @@ async fn collect_service_selections_interactive(
         
         if service_name != "none" {
             let category = service_def.category.clone();
+            
+            // Collect service-specific configuration
+            let service_config = prompt_for_service_configuration(
+                &service_name, 
+                &category, 
+                &composition_engine, 
+                options
+            ).await?;
+            
             services.push(ServiceSelection {
                 category,
                 provider: service_name,
-                config: std::collections::HashMap::new(),
+                config: service_config,
             });
         }
     }
@@ -489,6 +547,103 @@ async fn collect_service_selections_interactive(
     Ok(services)
 }
 
+/* Apply a service combination preset to create ServiceSelection objects */
+async fn apply_service_combination(
+    combination: &ServiceCombination,
+    composition_engine: &CompositionEngine,
+    options: &CreateOptions,
+) -> Result<Vec<ServiceSelection>> {
+    let mut services = Vec::new();
+    
+    println!("\n{} Applying preset services...", "⚙️".bright_blue());
+    
+    for service_spec in &combination.services {
+        let provider = service_spec.provider.clone();
+        let category = service_spec.category.clone();
+        
+        println!("  {} Setting up {} service with {}", 
+                "🔧".bright_cyan(), 
+                format!("{:?}", category).to_lowercase(), 
+                provider.bright_yellow());
+        
+        // Start with the predefined configuration from the preset
+        let service_config = service_spec.config.clone();
+        
+        // Convert serde_json::Value to the format expected by our system
+        let mut final_config = std::collections::HashMap::new();
+        for (key, value) in service_config {
+            final_config.insert(key, value);
+        }
+        
+        // Load any additional configuration prompts for this service if it's interactive
+        if !options.no_input {
+            // Check if this service has additional configuration prompts beyond the preset
+            if let Ok(service_path) = composition_engine.shared_services_path()
+                .join(format!("{:?}", category).to_lowercase())
+                .join(&provider)
+                .join("anvil.yaml")
+                .canonicalize() 
+            {
+                if let Ok(service_config_content) = tokio::fs::read_to_string(&service_path).await {
+                    if let Ok(service_config_yaml) = serde_yaml::from_str::<ServiceConfig>(&service_config_content) {
+                        // Only prompt for configuration that wasn't set in the preset
+                        for prompt in &service_config_yaml.configuration_prompts {
+                            let config_key = format!("config_{}", prompt.name);
+                            if !final_config.contains_key(&config_key) {
+                                // This configuration wasn't preset, so we can optionally prompt for it
+                                if prompt.required {
+                                    println!("    {} Additional configuration needed for {}", 
+                                            "❓".bright_yellow(), prompt.name);
+                                    
+                                    let value = match prompt.prompt_type {
+                                        ServicePromptType::Text => {
+                                            let default = prompt.default.as_deref().unwrap_or("");
+                                            inquire::Text::new(&prompt.prompt)
+                                                .with_default(default)
+                                                .with_help_message(prompt.description.as_deref().unwrap_or(""))
+                                                .prompt()?
+                                        },
+                                        ServicePromptType::Boolean => {
+                                            let default = prompt.default.as_deref().unwrap_or("false") == "true";
+                                            inquire::Confirm::new(&prompt.prompt)
+                                                .with_default(default)
+                                                .with_help_message(prompt.description.as_deref().unwrap_or(""))
+                                                .prompt()?.to_string()
+                                        },
+                                        ServicePromptType::Select => {
+                                            if let Some(options) = &prompt.options {
+                                                inquire::Select::new(&prompt.prompt, options.clone())
+                                                    .with_help_message(prompt.description.as_deref().unwrap_or(""))
+                                                    .prompt()?
+                                            } else {
+                                                prompt.default.as_deref().unwrap_or("").to_string()
+                                            }
+                                        },
+                                        _ => prompt.default.as_deref().unwrap_or("").to_string(),
+                                    };
+                                    
+                                    final_config.insert(config_key, serde_json::Value::String(value));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        services.push(ServiceSelection {
+            category,
+            provider,
+            config: final_config,
+        });
+    }
+    
+    println!("{} Preset applied with {} services configured", 
+            "✅".bright_green(), 
+            services.len());
+    
+    Ok(services)
+}
 
 async fn prompt_for_service_dynamic(
     service_def: &ServiceDefinition, 
@@ -536,6 +691,152 @@ async fn prompt_for_service_dynamic(
         .map_err(|e| anyhow::anyhow!("Failed to get user input: {}", e))?;
     
     Ok(selection)
+}
+
+async fn prompt_for_service_configuration(
+    service_name: &str,
+    category: &ServiceCategory,
+    composition_engine: &CompositionEngine,
+    options: &CreateOptions,
+) -> Result<std::collections::HashMap<String, serde_json::Value>> {
+    use inquire::{Text, Confirm, Select, MultiSelect};
+    use anvil_engine::config::{ServiceConfig, ServicePromptType};
+    
+    // Skip if no-input is enabled
+    if options.no_input {
+        return Ok(std::collections::HashMap::new());
+    }
+    
+    // Load service configuration to get prompts
+    let service_config_path = composition_engine.shared_services_path()
+        .join(format!("{:?}", category).to_lowercase())
+        .join(service_name)
+        .join("anvil.yaml");
+    
+    let service_config = match ServiceConfig::from_file(&service_config_path).await {
+        Ok(config) => config,
+        Err(_) => {
+            // Service doesn't have a config file or prompts, return empty config
+            return Ok(std::collections::HashMap::new());
+        }
+    };
+    
+    let mut config = std::collections::HashMap::new();
+    
+    if service_config.configuration_prompts.is_empty() {
+        return Ok(config);
+    }
+    
+    println!("\n{} {} Configuration", "⚙️".bright_blue(), service_config.name);
+    println!("Configure {} settings:\n", service_name);
+    
+    for prompt in &service_config.configuration_prompts {
+        let value = match prompt.prompt_type {
+            ServicePromptType::Text => {
+                let mut text_prompt = Text::new(&prompt.prompt);
+                
+                if let Some(default) = &prompt.default {
+                    text_prompt = text_prompt.with_default(default);
+                }
+                
+                if let Some(description) = &prompt.description {
+                    text_prompt = text_prompt.with_help_message(description);
+                }
+                
+                let result = if prompt.required {
+                    text_prompt.prompt()
+                        .map_err(|e| anyhow::anyhow!("Failed to get user input: {}", e))?
+                } else {
+                    text_prompt.prompt_skippable()
+                        .map_err(|e| anyhow::anyhow!("Failed to get user input: {}", e))?
+                        .unwrap_or_default()
+                };
+                
+                serde_json::Value::String(result)
+            }
+            
+            ServicePromptType::Boolean => {
+                let default_bool = prompt.default.as_ref()
+                    .and_then(|d| d.parse::<bool>().ok())
+                    .unwrap_or(false);
+                
+                let mut confirm_prompt = Confirm::new(&prompt.prompt)
+                    .with_default(default_bool);
+                
+                if let Some(description) = &prompt.description {
+                    confirm_prompt = confirm_prompt.with_help_message(description);
+                }
+                
+                let result = confirm_prompt.prompt()
+                    .map_err(|e| anyhow::anyhow!("Failed to get user input: {}", e))?;
+                
+                serde_json::Value::Bool(result)
+            }
+            
+            ServicePromptType::Select => {
+                if let Some(options) = &prompt.options {
+                    let default_index = prompt.default.as_ref()
+                        .and_then(|d| options.iter().position(|opt| opt == d))
+                        .unwrap_or(0);
+                    
+                    let mut select_prompt = Select::new(&prompt.prompt, options.clone())
+                        .with_starting_cursor(default_index);
+                    
+                    if let Some(description) = &prompt.description {
+                        select_prompt = select_prompt.with_help_message(description);
+                    }
+                    
+                    let result = select_prompt.prompt()
+                        .map_err(|e| anyhow::anyhow!("Failed to get user input: {}", e))?;
+                    
+                    serde_json::Value::String(result)
+                } else {
+                    return Err(anyhow::anyhow!("Select prompt '{}' is missing options", prompt.name));
+                }
+            }
+            
+            ServicePromptType::MultiSelect => {
+                if let Some(options) = &prompt.options {
+                    let mut multiselect_prompt = MultiSelect::new(&prompt.prompt, options.clone());
+                    
+                    if let Some(description) = &prompt.description {
+                        multiselect_prompt = multiselect_prompt.with_help_message(description);
+                    }
+                    
+                    let result = multiselect_prompt.prompt()
+                        .map_err(|e| anyhow::anyhow!("Failed to get user input: {}", e))?;
+                    
+                    serde_json::Value::Array(
+                        result.into_iter()
+                            .map(|s| serde_json::Value::String(s))
+                            .collect()
+                    )
+                } else {
+                    return Err(anyhow::anyhow!("MultiSelect prompt '{}' is missing options", prompt.name));
+                }
+            }
+            
+            ServicePromptType::Password => {
+                use inquire::Password;
+                
+                let mut password_prompt = Password::new(&prompt.prompt);
+                
+                if let Some(description) = &prompt.description {
+                    password_prompt = password_prompt.with_help_message(description);
+                }
+                
+                let result = password_prompt.prompt()
+                    .map_err(|e| anyhow::anyhow!("Failed to get user input: {}", e))?;
+                
+                serde_json::Value::String(result)
+            }
+        };
+        
+        config.insert(prompt.name.clone(), value);
+    }
+    
+    println!();
+    Ok(config)
 }
 
 async fn list_templates(_language: Option<String>, _format: OutputFormat) -> Result<()> {

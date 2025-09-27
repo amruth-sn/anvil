@@ -41,6 +41,25 @@ services:
     required: false
     default: "none"
 
+# Predefined service combinations for quick setup
+service_combinations:
+  - name: "Minimal Setup"
+    description: "Basic Next.js app with no external services - perfect for prototyping"
+    recommended: false
+    services: []
+    tags: ["minimal", "prototype", "starter"]
+
+  - name: "Starter Pack"
+    description: "Authentication-enabled app - great for getting started quickly"
+    recommended: true
+    services:
+      - category: "auth"
+        provider: "clerk"
+        config:
+          app_name: "Starter App"
+          enable_social_login: true
+    tags: ["starter", "auth", "recommended"]
+
 features:
   - name: "typescript"
     description: "TypeScript support"

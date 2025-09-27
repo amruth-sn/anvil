@@ -15,6 +15,29 @@ environment_variables:
     description: "Clerk secret key"
     required: true
 
+configuration_prompts:
+  - name: "app_name"
+    prompt: "What's your application name (for Clerk dashboard)?"
+    prompt_type: "text"
+    default: "My SaaS App"
+    description: "This will be used to identify your app in the Clerk dashboard"
+  - name: "enable_social_login"
+    prompt: "Enable social login providers (Google, GitHub, etc.)?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Allows users to sign in with social providers"
+  - name: "allowed_domains"
+    prompt: "Restrict sign-ups to specific email domains? (optional)"
+    prompt_type: "text"
+    required: false
+    description: "Comma-separated list of domains (e.g., company.com,partner.com)"
+  - name: "user_metadata_fields"
+    prompt: "Which additional user metadata fields do you need?"
+    prompt_type: "multi_select"
+    options: ["company", "role", "phone", "address", "custom_id"]
+    required: false
+    description: "Select additional fields to collect during user registration"
+
 files:
   - path: "middleware.ts"
     description: "Clerk middleware for route protection"
