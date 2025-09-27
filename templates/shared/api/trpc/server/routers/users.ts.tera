@@ -1,0 +1,210 @@
+import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
+import { 
+  createTRPCRouter, 
+  {% if api_config_include_middleware %}publicProcedureWithMiddleware,{% else %}publicProcedure,{% endif %}
+  {% if api_config_include_auth_context %}protectedProcedure,{% endif %}
+} from '@/server/trpc';
+import { 
+  createUserSchema, 
+  updateUserSchema, 
+  getUserByIdSchema,
+  getUsersSchema,
+  type User,
+} from '@/lib/trpc/schemas';
+{% if api_config_include_subscriptions %}import { observable } from '@trpc/server/observable';
+import { EventEmitter } from 'events';
+
+// Event emitter for subscriptions
+const userEvents = new EventEmitter();{% endif %}
+
+export const usersRouter = createTRPCRouter({
+  // Get all users with pagination
+  getAll: {% if api_config_include_middleware %}publicProcedureWithMiddleware{% else %}publicProcedure{% endif %}
+    .input(getUsersSchema)
+    .query(async ({ input }) => {
+      const { page = 1, limit = 10, search } = input;
+      
+      // TODO: Replace with your actual database query
+      let users: User[] = [
+        {
+          id: '1',
+          name: 'John Doe',
+          email: 'john@example.com',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: '2',
+          name: 'Jane Smith',
+          email: 'jane@example.com',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ];
+      
+      // Apply search filter
+      if (search) {
+        users = users.filter(user => 
+          user.name.toLowerCase().includes(search.toLowerCase()) ||
+          user.email.toLowerCase().includes(search.toLowerCase())
+        );
+      }
+      
+      // Apply pagination
+      const offset = (page - 1) * limit;
+      const paginatedUsers = users.slice(offset, offset + limit);
+      
+      return {
+        users: paginatedUsers,
+        pagination: {
+          page,
+          limit,
+          total: users.length,
+          totalPages: Math.ceil(users.length / limit),
+        },
+      };
+    }),
+
+  // Get user by ID
+  getById: {% if api_config_include_middleware %}publicProcedureWithMiddleware{% else %}publicProcedure{% endif %}
+    .input(getUserByIdSchema)
+    .query(async ({ input }) => {
+      const { id } = input;
+      
+      // TODO: Replace with your actual database query
+      const user: User | null = id === '1' ? {
+        id: '1',
+        name: 'John Doe',
+        email: 'john@example.com',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } : null;
+      
+      if (!user) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `User with ID ${id} not found`,
+        });
+      }
+      
+      return user;
+    }),
+
+  // Create a new user
+  create: {% if api_config_include_auth_context %}protectedProcedure{% else %}{% if api_config_include_middleware %}publicProcedureWithMiddleware{% else %}publicProcedure{% endif %}{% endif %}
+    .input(createUserSchema)
+    .mutation(async ({ input{% if api_config_include_auth_context %}, ctx{% endif %} }) => {
+      const { name, email } = input;
+      
+      // TODO: Replace with your actual database insert
+      const newUser: User = {
+        id: Math.random().toString(36).substr(2, 9),
+        name,
+        email,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      
+      {% if api_config_include_subscriptions %}// Emit event for subscriptions
+      userEvents.emit('userCreated', newUser);
+      {% endif %}
+      
+      return newUser;
+    }),
+
+  // Update an existing user
+  update: {% if api_config_include_auth_context %}protectedProcedure{% else %}{% if api_config_include_middleware %}publicProcedureWithMiddleware{% else %}publicProcedure{% endif %}{% endif %}
+    .input(updateUserSchema)
+    .mutation(async ({ input{% if api_config_include_auth_context %}, ctx{% endif %} }) => {
+      const { id, name, email } = input;
+      
+      // TODO: Replace with your actual database update
+      const existingUser = id === '1' ? {
+        id: '1',
+        name: 'John Doe',
+        email: 'john@example.com',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } : null;
+      
+      if (!existingUser) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `User with ID ${id} not found`,
+        });
+      }
+      
+      const updatedUser: User = {
+        ...existingUser,
+        name: name ?? existingUser.name,
+        email: email ?? existingUser.email,
+        updatedAt: new Date(),
+      };
+      
+      {% if api_config_include_subscriptions %}// Emit event for subscriptions
+      userEvents.emit('userUpdated', updatedUser);
+      {% endif %}
+      
+      return updatedUser;
+    }),
+
+  // Delete a user
+  delete: {% if api_config_include_auth_context %}protectedProcedure{% else %}{% if api_config_include_middleware %}publicProcedureWithMiddleware{% else %}publicProcedure{% endif %}{% endif %}
+    .input(getUserByIdSchema)
+    .mutation(async ({ input{% if api_config_include_auth_context %}, ctx{% endif %} }) => {
+      const { id } = input;
+      
+      // TODO: Replace with your actual database delete
+      const existingUser = id === '1' ? {
+        id: '1',
+        name: 'John Doe',
+        email: 'john@example.com',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } : null;
+      
+      if (!existingUser) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `User with ID ${id} not found`,
+        });
+      }
+      
+      {% if api_config_include_subscriptions %}// Emit event for subscriptions
+      userEvents.emit('userDeleted', { id });
+      {% endif %}
+      
+      return { success: true, message: `User ${id} deleted successfully` };
+    }),
+
+{% if api_config_include_subscriptions %}  // Real-time subscription for user changes
+  onUserChange: {% if api_config_include_middleware %}publicProcedureWithMiddleware{% else %}publicProcedure{% endif %}
+    .subscription(() => {
+      return observable<{ type: string; user?: User; id?: string }>((emit) => {
+        const onUserCreated = (user: User) => {
+          emit.next({ type: 'created', user });
+        };
+        
+        const onUserUpdated = (user: User) => {
+          emit.next({ type: 'updated', user });
+        };
+        
+        const onUserDeleted = (data: { id: string }) => {
+          emit.next({ type: 'deleted', id: data.id });
+        };
+        
+        // Subscribe to events
+        userEvents.on('userCreated', onUserCreated);
+        userEvents.on('userUpdated', onUserUpdated);
+        userEvents.on('userDeleted', onUserDeleted);
+        
+        // Cleanup function
+        return () => {
+          userEvents.off('userCreated', onUserCreated);
+          userEvents.off('userUpdated', onUserUpdated);
+          userEvents.off('userDeleted', onUserDeleted);
+        };
+      });
+    }),{% endif %}
+});

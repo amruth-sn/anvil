@@ -1,0 +1,88 @@
+import { createTRPCProxyClient, httpBatchLink } from '@trpc/client';
+import { createTRPCNext } from '@trpc/next';
+import type { AppRouter } from '@/server/routers/_app';
+import superjson from 'superjson';
+
+const getBaseUrl = () => {
+  if (typeof window !== 'undefined') return ''; // browser should use relative url
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`; // SSR should use vercel url
+  return `http://localhost:${process.env.PORT ?? 3000}`; // dev SSR should use localhost
+};
+
+// Vanilla client (for use outside of React)
+export const trpcClient = createTRPCProxyClient<AppRouter>({
+  transformer: superjson,
+  links: [
+    httpBatchLink({
+      url: `${getBaseUrl()}/api/trpc`,
+      headers() {
+        // Add any headers you need here (e.g., authentication)
+        return {};
+      },
+    }),
+  ],
+});
+
+// Next.js client with React Query integration
+export const trpc = createTRPCNext<AppRouter>({
+  config() {
+    return {
+      transformer: superjson,
+      links: [
+        httpBatchLink({
+          url: `${getBaseUrl()}/api/trpc`,
+          headers() {
+            // Add any headers you need here (e.g., authentication)
+            const headers: Record<string, string> = {};
+            
+            // Add auth token if available
+            if (typeof window !== 'undefined') {
+              const token = localStorage.getItem('auth-token');
+              if (token) {
+                headers.authorization = `Bearer ${token}`;
+              }
+            }
+            
+            return headers;
+          },
+        }),
+      ],
+      queryClientConfig: {
+        defaultOptions: {
+          queries: {
+            staleTime: 5 * 60 * 1000, // 5 minutes
+            retry: (failureCount, error: any) => {
+              // Don't retry on 4xx errors
+              if (error?.data?.httpStatus >= 400 && error?.data?.httpStatus < 500) {
+                return false;
+              }
+              return failureCount < 3;
+            },
+          },
+          mutations: {
+            retry: false,
+          },
+        },
+      },
+    };
+  },
+  ssr: false, // Set to true if you want server-side rendering
+});
+
+// Helper type for inferring router types
+export type RouterOutputs = Parameters<AppRouter['createCaller']>[0];
+export type RouterInputs = {
+  [Key in keyof AppRouter['_def']['record']]: AppRouter['_def']['record'][Key] extends {
+    _def: { inputs: infer TInput };
+  }
+    ? TInput
+    : never;
+};
+
+// Utility for creating a server-side caller
+export const createServerSideCaller = (context: any) => {
+  // This would be used on the server side to call tRPC procedures directly
+  // TODO: Import and use your actual createCallerFactory from the router
+  // return createCallerFactory(appRouter)(context);
+  return null;
+};

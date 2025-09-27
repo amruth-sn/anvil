@@ -1,0 +1,85 @@
+name: "trpc-api"
+description: "Type-safe tRPC API with full-stack TypeScript integration"
+version: "2.0.0"
+category: "api"
+
+# tRPC requires TypeScript
+language_requirements:
+  - "typescript"
+
+dependencies:
+  npm:
+    - "@trpc/server@^10.45.0"
+    - "@trpc/client@^10.45.0"
+    - "@trpc/next@^10.45.0"
+    - "@trpc/react-query@^10.45.0"
+    - "@tanstack/react-query@^5.0.0"
+    - "@tanstack/react-query-devtools@^5.0.0"
+    - "zod@^3.22.0"
+    - "superjson@^2.2.0"
+
+environment_variables:
+  - name: "TRPC_ENDPOINT"
+    description: "tRPC endpoint URL"
+    required: false
+    default: "/api/trpc"
+
+configuration_prompts:
+  - name: "include_subscriptions"
+    prompt: "Include WebSocket subscriptions support?"
+    prompt_type: "boolean"
+    default: "false"
+    description: "Enables real-time subscriptions via WebSockets"
+  - name: "include_auth_context"
+    prompt: "Include authentication context in tRPC?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Adds user authentication context to all procedures"
+  - name: "include_error_handling"
+    prompt: "Include custom error handling?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Adds comprehensive error handling and formatting"
+  - name: "include_middleware"
+    prompt: "Include rate limiting and logging middleware?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Adds middleware for rate limiting, logging, and monitoring"
+
+# Compatibility rules
+compatibility_rules:
+  - rule_type: "requires_language"
+    target_service: "typescript"
+    condition: "language == 'typescript'"
+    message: "tRPC requires TypeScript for type safety"
+
+files:
+  - path: "app/api/trpc/[trpc]/route.ts"
+    description: "tRPC API handler for Next.js App Router"
+  - path: "server/trpc.ts"
+    description: "tRPC server configuration and context"
+  - path: "server/routers/_app.ts"
+    description: "Main tRPC router"
+  - path: "server/routers/users.ts"
+    description: "User-related tRPC procedures"
+  - path: "lib/trpc/client.ts"
+    description: "tRPC client configuration"
+  - path: "lib/trpc/react.tsx"
+    description: "React Query integration with tRPC"
+  - path: "lib/trpc/server.ts"
+    description: "Server-side tRPC utilities"
+  - path: "lib/trpc/schemas.ts"
+    description: "Zod schemas for tRPC input/output validation"
+
+setup_instructions: |
+  🚀 tRPC Setup:
+  1. Type-safe API available at /api/trpc
+  2. React hooks auto-generated for all procedures
+  3. Client available in components via useTRPC hooks
+  4. Server-side rendering support included
+  5. Subscriptions ready (if enabled)
+  
+  🔧 Usage:
+  - Use trpc.users.getAll.useQuery() in React components
+  - Server-side: await caller.users.getById({ id: '123' })
+  - Real-time updates via subscriptions (if enabled)

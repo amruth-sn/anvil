@@ -1,0 +1,110 @@
+import { z } from 'zod';
+
+// User schemas
+export const userSchema = z.object({
+  id: z.string().min(1, 'User ID is required'),
+  name: z.string().min(1, 'Name is required').max(100, 'Name too long'),
+  email: z.string().email('Invalid email format'),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
+export const createUserSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(100, 'Name too long'),
+  email: z.string().email('Invalid email format'),
+});
+
+export const updateUserSchema = z.object({
+  id: z.string().min(1, 'User ID is required'),
+  name: z.string().min(1, 'Name is required').max(100, 'Name too long').optional(),
+  email: z.string().email('Invalid email format').optional(),
+});
+
+export const getUserByIdSchema = z.object({
+  id: z.string().min(1, 'User ID is required'),
+});
+
+export const getUsersSchema = z.object({
+  page: z.number().min(1).default(1),
+  limit: z.number().min(1).max(100).default(10),
+  search: z.string().optional(),
+});
+
+// Pagination schema
+export const paginationSchema = z.object({
+  page: z.number().min(1),
+  limit: z.number().min(1).max(100),
+  total: z.number().min(0),
+  totalPages: z.number().min(0),
+});
+
+// Response schemas
+export const getUsersResponseSchema = z.object({
+  users: z.array(userSchema),
+  pagination: paginationSchema,
+});
+
+export const deleteUserResponseSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+});
+
+{% if api_config_include_subscriptions %}// Subscription schemas
+export const userChangeEventSchema = z.object({
+  type: z.enum(['created', 'updated', 'deleted']),
+  user: userSchema.optional(),
+  id: z.string().optional(),
+});{% endif %}
+
+// Type exports
+export type User = z.infer<typeof userSchema>;
+export type CreateUser = z.infer<typeof createUserSchema>;
+export type UpdateUser = z.infer<typeof updateUserSchema>;
+export type GetUserById = z.infer<typeof getUserByIdSchema>;
+export type GetUsers = z.infer<typeof getUsersSchema>;
+export type Pagination = z.infer<typeof paginationSchema>;
+export type GetUsersResponse = z.infer<typeof getUsersResponseSchema>;
+export type DeleteUserResponse = z.infer<typeof deleteUserResponseSchema>;
+{% if api_config_include_subscriptions %}export type UserChangeEvent = z.infer<typeof userChangeEventSchema>;{% endif %}
+
+// Helper functions for validation
+export function validateUser(data: unknown): User {
+  return userSchema.parse(data);
+}
+
+export function validateCreateUser(data: unknown): CreateUser {
+  return createUserSchema.parse(data);
+}
+
+export function validateUpdateUser(data: unknown): UpdateUser {
+  return updateUserSchema.parse(data);
+}
+
+export function validateGetUsers(data: unknown): GetUsers {
+  return getUsersSchema.parse(data);
+}
+
+// Mock data for development
+export const mockUsers: User[] = [
+  {
+    id: '1',
+    name: 'John Doe',
+    email: 'john@example.com',
+    createdAt: new Date('2023-01-01'),
+    updatedAt: new Date('2023-01-01'),
+  },
+  {
+    id: '2',
+    name: 'Jane Smith',
+    email: 'jane@example.com',
+    createdAt: new Date('2023-01-02'),
+    updatedAt: new Date('2023-01-02'),
+  },
+  {
+    id: '3',
+    name: 'Bob Johnson',
+    email: 'bob@example.com',
+    createdAt: new Date('2023-01-03'),
+    updatedAt: new Date('2023-01-03'),
+  },
+];

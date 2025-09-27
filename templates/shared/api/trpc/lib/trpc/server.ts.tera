@@ -1,0 +1,63 @@
+import { createCallerFactory } from '@trpc/server';
+import { appRouter } from '@/server/routers/_app';
+import { createTRPCContext } from '@/server/trpc';
+import type { NextRequest } from 'next/server';
+
+// Create a server-side caller factory
+const createCaller = createCallerFactory(appRouter);
+
+/**
+ * Server-side helper to call tRPC procedures directly
+ * Use this in server components, API routes, or server actions
+ */
+export async function createServerSideClient(req?: NextRequest) {
+  const context = await createTRPCContext({ 
+    req: req || new NextRequest('http://localhost:3000') 
+  });
+  
+  return createCaller(context);
+}
+
+/**
+ * Helper to create a caller with authentication context
+ * Use this when you have user information available
+ */
+export async function createAuthenticatedCaller(user: {
+  id: string;
+  email: string;
+  name: string;
+}) {
+  const mockRequest = new NextRequest('http://localhost:3000');
+  
+  // Create context with authenticated user
+  const context = await createTRPCContext({ 
+    req: mockRequest 
+  });
+  
+  // Override the user in context
+  const authenticatedContext = {
+    ...context,
+    user,
+  };
+  
+  return createCaller(authenticatedContext);
+}
+
+/**
+ * Helper to validate tRPC procedures on the server
+ * Useful for testing or direct server-side validation
+ */
+export async function validateTRPCProcedure<T>(
+  procedureCall: () => Promise<T>
+): Promise<{ success: true; data: T } | { success: false; error: string }> {
+  try {
+    const data = await procedureCall();
+    return { success: true, data };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return { success: false, error: errorMessage };
+  }
+}
+
+// Re-export the router type for convenience
+export type { AppRouter } from '@/server/routers/_app';

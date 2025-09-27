@@ -1,0 +1,168 @@
+'use client';
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { useState } from 'react';
+import { trpc } from './client';
+
+interface TRPCProviderProps {
+  children: React.ReactNode;
+}
+
+export function TRPCProvider({ children }: TRPCProviderProps) {
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            staleTime: 5 * 60 * 1000, // 5 minutes
+            refetchOnWindowFocus: false,
+            retry: (failureCount, error: any) => {
+              // Don't retry on 4xx errors
+              if (error?.data?.httpStatus >= 400 && error?.data?.httpStatus < 500) {
+                return false;
+              }
+              return failureCount < 3;
+            },
+          },
+          mutations: {
+            retry: false,
+          },
+        },
+      })
+  );
+
+  const [trpcClient] = useState(() =>
+    trpc.createClient({
+      transformer: import('superjson').then(m => m.default),
+      links: [
+        trpc.httpBatchLink({
+          url: `${getBaseUrl()}/api/trpc`,
+          headers() {
+            const headers: Record<string, string> = {};
+            
+            // Add auth token if available
+            const token = localStorage.getItem('auth-token');
+            if (token) {
+              headers.authorization = `Bearer ${token}`;
+            }
+            
+            return headers;
+          },
+        }),
+      ],
+    })
+  );
+
+  return (
+    <trpc.Provider client={trpcClient} queryClient={queryClient}>
+      <QueryClientProvider client={queryClient}>
+        {children}
+        <ReactQueryDevtools 
+          initialIsOpen={false} 
+          position="bottom-right"
+        />
+      </QueryClientProvider>
+    </trpc.Provider>
+  );
+}
+
+// Helper hook for using tRPC in components
+export const useTRPC = () => trpc;
+
+// Helper hooks for common operations
+export function useUsers(input?: Parameters<typeof trpc.users.getAll.useQuery>[0]) {
+  return trpc.users.getAll.useQuery(input ?? {});
+}
+
+export function useUser(id: string) {
+  return trpc.users.getById.useQuery({ id });
+}
+
+export function useCreateUser() {
+  const utils = trpc.useUtils();
+  
+  return trpc.users.create.useMutation({
+    onSuccess: () => {
+      // Invalidate users list to refetch
+      utils.users.getAll.invalidate();
+    },
+    onError: (error) => {
+      console.error('Failed to create user:', error);
+    },
+  });
+}
+
+export function useUpdateUser() {
+  const utils = trpc.useUtils();
+  
+  return trpc.users.update.useMutation({
+    onSuccess: (updatedUser) => {
+      // Update the user in the cache
+      utils.users.getById.setData({ id: updatedUser.id }, updatedUser);
+      // Invalidate users list to refetch
+      utils.users.getAll.invalidate();
+    },
+    onError: (error) => {
+      console.error('Failed to update user:', error);
+    },
+  });
+}
+
+export function useDeleteUser() {
+  const utils = trpc.useUtils();
+  
+  return trpc.users.delete.useMutation({
+    onSuccess: (_, variables) => {
+      // Remove the user from cache
+      utils.users.getById.setData({ id: variables.id }, undefined);
+      // Invalidate users list to refetch
+      utils.users.getAll.invalidate();
+    },
+    onError: (error) => {
+      console.error('Failed to delete user:', error);
+    },
+  });
+}
+
+{% if api_config_include_subscriptions %}// Subscription hook for real-time updates
+export function useUserSubscription() {
+  const utils = trpc.useUtils();
+  
+  trpc.users.onUserChange.useSubscription(undefined, {
+    onData: (event) => {
+      switch (event.type) {
+        case 'created':
+          if (event.user) {
+            // Add the new user to the cache
+            utils.users.getAll.invalidate();
+          }
+          break;
+        case 'updated':
+          if (event.user) {
+            // Update the user in the cache
+            utils.users.getById.setData({ id: event.user.id }, event.user);
+            utils.users.getAll.invalidate();
+          }
+          break;
+        case 'deleted':
+          if (event.id) {
+            // Remove the user from cache
+            utils.users.getById.setData({ id: event.id }, undefined);
+            utils.users.getAll.invalidate();
+          }
+          break;
+      }
+    },
+    onError: (error) => {
+      console.error('User subscription error:', error);
+    },
+  });
+}{% endif %}
+
+// Utility function to get base URL
+function getBaseUrl() {
+  if (typeof window !== 'undefined') return '';
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return `http://localhost:${process.env.PORT ?? 3000}`;
+}
