@@ -1,0 +1,210 @@
+{% if api_config_include_validation %}import { z } from 'zod';
+
+// User schemas for validation
+export const UserSchema = z.object({
+  id: z.string().min(1, 'User ID is required'),
+  name: z.string().min(1, 'Name is required').max(100, 'Name too long'),
+  email: z.string().email('Invalid email format'),
+  createdAt: z.string().datetime('Invalid date format'),
+  updatedAt: z.string().datetime('Invalid date format').optional(),
+});
+
+export const CreateUserSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(100, 'Name too long'),
+  email: z.string().email('Invalid email format'),
+});
+
+export const UpdateUserSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(100, 'Name too long').optional(),
+  email: z.string().email('Invalid email format').optional(),
+});
+
+// API Response schemas
+export const ApiResponseSchema = z.object({
+  success: z.boolean(),
+  data: z.unknown().optional(),
+  error: z.string().optional(),
+  message: z.string().optional(),
+});
+
+export const PaginationSchema = z.object({
+  page: z.number().min(1),
+  limit: z.number().min(1).max(100),
+  total: z.number().min(0),
+  totalPages: z.number().min(0).optional(),
+});
+
+export const PaginatedResponseSchema = ApiResponseSchema.extend({
+  pagination: PaginationSchema.optional(),
+});
+
+// Error response schema
+export const ErrorResponseSchema = z.object({
+  success: z.literal(false),
+  error: z.string(),
+  message: z.string().optional(),
+  details: z.array(z.object({
+    code: z.string(),
+    message: z.string(),
+    path: z.array(z.union([z.string(), z.number()])),
+  })).optional(),
+});
+
+// Type exports
+export type User = z.infer<typeof UserSchema>;
+export type CreateUser = z.infer<typeof CreateUserSchema>;
+export type UpdateUser = z.infer<typeof UpdateUserSchema>;
+export type ApiResponse<T = unknown> = z.infer<typeof ApiResponseSchema> & {
+  data?: T;
+};
+export type PaginatedResponse<T = unknown> = z.infer<typeof PaginatedResponseSchema> & {
+  data?: T[];
+};
+export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
+export type Pagination = z.infer<typeof PaginationSchema>;
+
+// Helper function to validate API responses
+export function validateApiResponse<T>(
+  data: unknown,
+  schema: z.ZodSchema<T>
+): ApiResponse<T> {
+  const response = ApiResponseSchema.parse(data);
+  
+  if (response.success && response.data) {
+    const validatedData = schema.parse(response.data);
+    return {
+      ...response,
+      data: validatedData,
+    };
+  }
+  
+  return response as ApiResponse<T>;
+}
+
+// Helper function to create API error responses
+export function createErrorResponse(
+  error: string,
+  message?: string,
+  details?: any[]
+): ErrorResponse {
+  return {
+    success: false,
+    error,
+    message,
+    details,
+  };
+}
+
+// Helper function to create success responses
+export function createSuccessResponse<T>(
+  data: T,
+  message?: string
+): ApiResponse<T> {
+  return {
+    success: true,
+    data,
+    message,
+  };
+}
+
+// Helper function to create paginated responses
+export function createPaginatedResponse<T>(
+  data: T[],
+  pagination: Pagination,
+  message?: string
+): PaginatedResponse<T> {
+  return {
+    success: true,
+    data,
+    pagination: {
+      ...pagination,
+      totalPages: Math.ceil(pagination.total / pagination.limit),
+    },
+    message,
+  };
+}{% else %}// Type definitions for API responses
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface CreateUser {
+  name: string;
+  email: string;
+}
+
+export interface UpdateUser {
+  name?: string;
+  email?: string;
+}
+
+export interface ApiResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+}
+
+export interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages?: number;
+}
+
+export interface PaginatedResponse<T = unknown> extends ApiResponse<T[]> {
+  pagination?: Pagination;
+}
+
+export interface ErrorResponse {
+  success: false;
+  error: string;
+  message?: string;
+  details?: any[];
+}
+
+// Helper function to create API error responses
+export function createErrorResponse(
+  error: string,
+  message?: string,
+  details?: any[]
+): ErrorResponse {
+  return {
+    success: false,
+    error,
+    message,
+    details,
+  };
+}
+
+// Helper function to create success responses
+export function createSuccessResponse<T>(
+  data: T,
+  message?: string
+): ApiResponse<T> {
+  return {
+    success: true,
+    data,
+    message,
+  };
+}
+
+// Helper function to create paginated responses
+export function createPaginatedResponse<T>(
+  data: T[],
+  pagination: Pagination,
+  message?: string
+): PaginatedResponse<T> {
+  return {
+    success: true,
+    data,
+    pagination: {
+      ...pagination,
+      totalPages: Math.ceil(pagination.total / pagination.limit),
+    },
+    message,
+  };
+}{% endif %}

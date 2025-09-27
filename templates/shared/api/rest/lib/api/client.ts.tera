@@ -1,0 +1,264 @@
+{% if api_config_include_validation %}import { z } from 'zod';
+import { 
+  User, 
+  CreateUser, 
+  UpdateUser, 
+  ApiResponse, 
+  PaginatedResponse,
+  UserSchema,
+  validateApiResponse 
+} from './schemas';{% else %}import { 
+  User, 
+  CreateUser, 
+  UpdateUser, 
+  ApiResponse, 
+  PaginatedResponse 
+} from './schemas';{% endif %}
+
+// API Client configuration
+interface ApiClientConfig {
+  baseUrl?: string;
+  timeout?: number;
+  headers?: Record<string, string>;
+}
+
+class ApiClient {
+  private baseUrl: string;
+  private timeout: number;
+  private defaultHeaders: Record<string, string>;
+
+  constructor(config: ApiClientConfig = {}) {
+    this.baseUrl = config.baseUrl || process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+    this.timeout = config.timeout || 30000; // 30 seconds
+    this.defaultHeaders = {
+      'Content-Type': 'application/json',
+      ...config.headers,
+    };
+  }
+
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<ApiResponse<T>> {
+    const url = `${this.baseUrl}${endpoint}`;
+    
+    const config: RequestInit = {
+      ...options,
+      headers: {
+        ...this.defaultHeaders,
+        ...options.headers,
+      },
+      signal: AbortSignal.timeout(this.timeout),
+    };
+
+    try {
+      const response = await fetch(url, config);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new ApiError(
+          data.error || `HTTP ${response.status}`,
+          response.status,
+          data
+        );
+      }
+
+      return data;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new ApiError('Request timeout', 408);
+      }
+      
+      throw new ApiError(
+        error instanceof Error ? error.message : 'Network error',
+        0
+      );
+    }
+  }
+
+  // Authentication methods
+  setAuthToken(token: string) {
+    this.defaultHeaders['Authorization'] = `Bearer ${token}`;
+  }
+
+  removeAuthToken() {
+    delete this.defaultHeaders['Authorization'];
+  }
+
+  // User API methods
+  async getUsers(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+  }): Promise<PaginatedResponse<User>> {
+    const searchParams = new URLSearchParams();
+    
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+    if (params?.search) searchParams.set('search', params.search);
+    
+    const query = searchParams.toString();
+    const endpoint = `/users${query ? `?${query}` : ''}`;
+    
+    {% if api_config_include_validation %}const response = await this.request<User[]>(endpoint);
+    
+    // Validate response data if validation is enabled
+    if (response.success && response.data) {
+      const validatedUsers = response.data.map(user => UserSchema.parse(user));
+      return {
+        ...response,
+        data: validatedUsers,
+      };
+    }
+    
+    return response;{% else %}return this.request<User[]>(endpoint);{% endif %}
+  }
+
+  async getUser(id: string): Promise<ApiResponse<User>> {
+    {% if api_config_include_validation %}const response = await this.request<User>(`/users/${id}`);
+    
+    // Validate response data if validation is enabled
+    if (response.success && response.data) {
+      const validatedUser = UserSchema.parse(response.data);
+      return {
+        ...response,
+        data: validatedUser,
+      };
+    }
+    
+    return response;{% else %}return this.request<User>(`/users/${id}`);{% endif %}
+  }
+
+  async createUser(userData: CreateUser): Promise<ApiResponse<User>> {
+    {% if api_config_include_validation %}// Validate input data
+    const validatedData = z.object({
+      name: z.string().min(1).max(100),
+      email: z.string().email(),
+    }).parse(userData);
+    
+    const response = await this.request<User>('/users', {
+      method: 'POST',
+      body: JSON.stringify(validatedData),
+    });
+    
+    // Validate response data
+    if (response.success && response.data) {
+      const validatedUser = UserSchema.parse(response.data);
+      return {
+        ...response,
+        data: validatedUser,
+      };
+    }
+    
+    return response;{% else %}return this.request<User>('/users', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });{% endif %}
+  }
+
+  async updateUser(id: string, userData: UpdateUser): Promise<ApiResponse<User>> {
+    {% if api_config_include_validation %}// Validate input data
+    const validatedData = z.object({
+      name: z.string().min(1).max(100).optional(),
+      email: z.string().email().optional(),
+    }).parse(userData);
+    
+    const response = await this.request<User>(`/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(validatedData),
+    });
+    
+    // Validate response data
+    if (response.success && response.data) {
+      const validatedUser = UserSchema.parse(response.data);
+      return {
+        ...response,
+        data: validatedUser,
+      };
+    }
+    
+    return response;{% else %}return this.request<User>(`/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(userData),
+    });{% endif %}
+  }
+
+  async deleteUser(id: string): Promise<ApiResponse<void>> {
+    return this.request<void>(`/users/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Generic methods for custom endpoints
+  async get<T>(endpoint: string, params?: Record<string, string>): Promise<ApiResponse<T>> {
+    const searchParams = new URLSearchParams(params);
+    const query = searchParams.toString();
+    const url = `${endpoint}${query ? `?${query}` : ''}`;
+    
+    return this.request<T>(url);
+  }
+
+  async post<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'POST',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
+  async put<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'PUT',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
+  async patch<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'PATCH',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
+  async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'DELETE',
+    });
+  }
+}
+
+// Custom error class for API errors
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public data?: any
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+
+  get isClientError(): boolean {
+    return this.status >= 400 && this.status < 500;
+  }
+
+  get isServerError(): boolean {
+    return this.status >= 500;
+  }
+
+  get isNetworkError(): boolean {
+    return this.status === 0;
+  }
+}
+
+// Create a default instance
+export const apiClient = new ApiClient();
+
+// Export the class for custom instances
+export { ApiClient };
+
+// Type exports
+export type { ApiClientConfig };

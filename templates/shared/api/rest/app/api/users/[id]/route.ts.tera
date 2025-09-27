@@ -1,0 +1,160 @@
+import { NextRequest, NextResponse } from 'next/server';
+{% if api_config_include_validation %}import { z } from 'zod';
+import { UserSchema, UpdateUserSchema } from '@/lib/api/schemas';{% endif %}
+{% if api_config_cors_enabled %}import { corsMiddleware } from '@/lib/api/middleware';{% endif %}
+
+interface RouteParams {
+  params: {
+    id: string;
+  };
+}
+
+// GET /api/users/[id] - Get a specific user
+export async function GET(request: NextRequest, { params }: RouteParams) {
+  try {
+    {% if api_config_cors_enabled %}// Apply CORS
+    const corsResponse = await corsMiddleware(request);
+    if (corsResponse) return corsResponse;
+    {% endif %}
+
+    const { id } = params;
+    
+    // TODO: Replace with your actual data fetching logic
+    const user = {
+      id,
+      name: 'John Doe',
+      email: 'john@example.com',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Simulate user not found
+    if (id === 'not-found') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'User not found',
+          message: `User with ID ${id} does not exist`,
+        },
+        { status: 404 }
+      );
+    }
+
+    {% if api_config_include_validation %}// Validate response data
+    const validatedUser = UserSchema.parse(user);
+    
+    return NextResponse.json({
+      success: true,
+      data: validatedUser,
+    });{% else %}return NextResponse.json({
+      success: true,
+      data: user,
+    });{% endif %}
+  } catch (error) {
+    console.error(`GET /api/users/${params.id} error:`, error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Failed to fetch user',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    );
+  }
+}
+
+// PUT /api/users/[id] - Update a specific user
+export async function PUT(request: NextRequest, { params }: RouteParams) {
+  try {
+    {% if api_config_cors_enabled %}// Apply CORS
+    const corsResponse = await corsMiddleware(request);
+    if (corsResponse) return corsResponse;
+    {% endif %}
+
+    const { id } = params;
+    const body = await request.json();
+    
+    {% if api_config_include_validation %}// Validate request body
+    const validatedData = UpdateUserSchema.parse(body);
+    
+    // TODO: Replace with your actual user update logic
+    const updatedUser = {
+      id,
+      ...validatedData,
+      updatedAt: new Date().toISOString(),
+    };
+    
+    // Validate response
+    const validatedUser = UserSchema.parse(updatedUser);
+    
+    return NextResponse.json({
+      success: true,
+      data: validatedUser,
+      message: 'User updated successfully',
+    });{% else %}// TODO: Replace with your actual user update logic
+    const updatedUser = {
+      id,
+      ...body,
+      updatedAt: new Date().toISOString(),
+    };
+    
+    return NextResponse.json({
+      success: true,
+      data: updatedUser,
+      message: 'User updated successfully',
+    });{% endif %}
+  } catch (error) {
+    console.error(`PUT /api/users/${params.id} error:`, error);
+    
+    {% if api_config_include_validation %}if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Validation failed',
+          details: error.errors,
+        },
+        { status: 400 }
+      );
+    }
+    {% endif %}
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Failed to update user',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE /api/users/[id] - Delete a specific user
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
+  try {
+    {% if api_config_cors_enabled %}// Apply CORS
+    const corsResponse = await corsMiddleware(request);
+    if (corsResponse) return corsResponse;
+    {% endif %}
+
+    const { id } = params;
+    
+    // TODO: Replace with your actual user deletion logic
+    // Simulate deletion process
+    
+    return NextResponse.json({
+      success: true,
+      message: `User ${id} deleted successfully`,
+    });
+  } catch (error) {
+    console.error(`DELETE /api/users/${params.id} error:`, error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Failed to delete user',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    );
+  }
+}

@@ -1,0 +1,255 @@
+import { NextRequest, NextResponse } from 'next/server';
+{% if api_config_include_validation %}import { z } from 'zod';{% endif %}
+
+{% if api_config_cors_enabled %}// CORS configuration
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': process.env.CORS_ORIGIN || '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+  'Access-Control-Allow-Credentials': 'true',
+  'Access-Control-Max-Age': '86400', // 24 hours
+};
+
+export async function corsMiddleware(request: NextRequest): Promise<NextResponse | null> {
+  // Handle preflight requests
+  if (request.method === 'OPTIONS') {
+    return new NextResponse(null, {
+      status: 200,
+      headers: CORS_HEADERS,
+    });
+  }
+
+  // For other requests, we'll add CORS headers to the response later
+  return null;
+}
+
+export function addCorsHeaders(response: NextResponse): NextResponse {
+  Object.entries(CORS_HEADERS).forEach(([key, value]) => {
+    response.headers.set(key, value);
+  });
+  return response;
+}{% endif %}
+
+{% if api_config_rate_limiting %}// Rate limiting configuration
+interface RateLimitStore {
+  [key: string]: {
+    count: number;
+    resetTime: number;
+  };
+}
+
+const rateLimitStore: RateLimitStore = {};
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 100; // Max requests per window
+
+export async function rateLimitMiddleware(request: NextRequest): Promise<NextResponse | null> {
+  const ip = request.ip || request.headers.get('x-forwarded-for') || 'unknown';
+  const now = Date.now();
+  const key = `rate_limit:${ip}`;
+
+  // Clean up old entries
+  Object.keys(rateLimitStore).forEach(k => {
+    if (rateLimitStore[k].resetTime < now) {
+      delete rateLimitStore[k];
+    }
+  });
+
+  // Check current rate limit
+  const current = rateLimitStore[key];
+  
+  if (current) {
+    if (current.resetTime > now) {
+      if (current.count >= RATE_LIMIT_MAX_REQUESTS) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Rate limit exceeded',
+            message: `Too many requests. Limit: ${RATE_LIMIT_MAX_REQUESTS} per minute`,
+            retryAfter: Math.ceil((current.resetTime - now) / 1000),
+          },
+          { 
+            status: 429,
+            headers: {
+              'Retry-After': Math.ceil((current.resetTime - now) / 1000).toString(),
+              'X-RateLimit-Limit': RATE_LIMIT_MAX_REQUESTS.toString(),
+              'X-RateLimit-Remaining': Math.max(0, RATE_LIMIT_MAX_REQUESTS - current.count - 1).toString(),
+              'X-RateLimit-Reset': current.resetTime.toString(),
+            },
+          }
+        );
+      }
+      current.count++;
+    } else {
+      // Reset window
+      current.count = 1;
+      current.resetTime = now + RATE_LIMIT_WINDOW;
+    }
+  } else {
+    // First request
+    rateLimitStore[key] = {
+      count: 1,
+      resetTime: now + RATE_LIMIT_WINDOW,
+    };
+  }
+
+  return null;
+}
+
+export function addRateLimitHeaders(response: NextResponse, ip: string): NextResponse {
+  const key = `rate_limit:${ip}`;
+  const current = rateLimitStore[key];
+  
+  if (current) {
+    response.headers.set('X-RateLimit-Limit', RATE_LIMIT_MAX_REQUESTS.toString());
+    response.headers.set('X-RateLimit-Remaining', Math.max(0, RATE_LIMIT_MAX_REQUESTS - current.count).toString());
+    response.headers.set('X-RateLimit-Reset', current.resetTime.toString());
+  }
+  
+  return response;
+}{% endif %}
+
+{% if api_config_include_validation %}// Validation middleware
+export function validateRequestBody<T>(schema: z.ZodSchema<T>) {
+  return async (request: NextRequest): Promise<{ data: T; error: null } | { data: null; error: NextResponse }> => {
+    try {
+      const body = await request.json();
+      const validatedData = schema.parse(body);
+      return { data: validatedData, error: null };
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return {
+          data: null,
+          error: NextResponse.json(
+            {
+              success: false,
+              error: 'Validation failed',
+              message: 'Request body validation failed',
+              details: error.errors.map(err => ({
+                code: err.code,
+                message: err.message,
+                path: err.path,
+              })),
+            },
+            { status: 400 }
+          ),
+        };
+      }
+      
+      return {
+        data: null,
+        error: NextResponse.json(
+          {
+            success: false,
+            error: 'Invalid JSON',
+            message: 'Request body must be valid JSON',
+          },
+          { status: 400 }
+        ),
+      };
+    }
+  };
+}
+
+export function validateQueryParams<T>(schema: z.ZodSchema<T>) {
+  return (request: NextRequest): { data: T; error: null } | { data: null; error: NextResponse } => {
+    try {
+      const { searchParams } = new URL(request.url);
+      const queryObject: Record<string, string> = {};
+      
+      searchParams.forEach((value, key) => {
+        queryObject[key] = value;
+      });
+      
+      const validatedData = schema.parse(queryObject);
+      return { data: validatedData, error: null };
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return {
+          data: null,
+          error: NextResponse.json(
+            {
+              success: false,
+              error: 'Validation failed',
+              message: 'Query parameters validation failed',
+              details: error.errors.map(err => ({
+                code: err.code,
+                message: err.message,
+                path: err.path,
+              })),
+            },
+            { status: 400 }
+          ),
+        };
+      }
+      
+      return {
+        data: null,
+        error: NextResponse.json(
+          {
+            success: false,
+            error: 'Invalid query parameters',
+            message: 'Query parameters validation failed',
+          },
+          { status: 400 }
+        ),
+      };
+    }
+  };
+}{% endif %}
+
+// Generic error handler
+export function handleApiError(error: unknown): NextResponse {
+  console.error('API Error:', error);
+  
+  if (error instanceof Error) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Internal server error',
+        message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong',
+      },
+      { status: 500 }
+    );
+  }
+  
+  return NextResponse.json(
+    {
+      success: false,
+      error: 'Internal server error',
+      message: 'An unknown error occurred',
+    },
+    { status: 500 }
+  );
+}
+
+// Authentication middleware (placeholder)
+export async function authMiddleware(request: NextRequest): Promise<{ user: any; error: null } | { user: null; error: NextResponse }> {
+  // TODO: Implement authentication logic based on your auth provider
+  // This is a placeholder that should be replaced with actual auth logic
+  
+  const authHeader = request.headers.get('authorization');
+  
+  if (!authHeader) {
+    return {
+      user: null,
+      error: NextResponse.json(
+        {
+          success: false,
+          error: 'Unauthorized',
+          message: 'Authorization header is required',
+        },
+        { status: 401 }
+      ),
+    };
+  }
+  
+  // TODO: Validate the token and extract user information
+  // For now, return a mock user
+  const user = {
+    id: 'user-123',
+    email: 'user@example.com',
+    name: 'Test User',
+  };
+  
+  return { user, error: null };
+}
