@@ -1,0 +1,212 @@
+'use client'
+
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
+import { useEffect } from "react"
+
+interface ProtectedRouteProps {
+  children: React.ReactNode
+  fallback?: React.ReactNode
+  {% if auth_config_enable_role_management %}
+  requiredRole?: string
+  requiredPermission?: string
+  requiredRoles?: string[]
+  {% endif %}
+  redirectTo?: string
+}
+
+export function ProtectedRoute({ 
+  children, 
+  fallback,
+  {% if auth_config_enable_role_management %}
+  requiredRole,
+  requiredPermission,
+  requiredRoles,
+  {% endif %}
+  redirectTo = "/auth/signin"
+}: ProtectedRouteProps) {
+  const { data: session, status } = useSession()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (status === "loading") return // Still loading
+
+    if (!session) {
+      const currentPath = window.location.pathname
+      const signInUrl = `${redirectTo}?callbackUrl=${encodeURIComponent(currentPath)}`
+      router.push(signInUrl)
+      return
+    }
+
+    {% if auth_config_enable_role_management %}
+    // Check role-based access
+    if (requiredRole && session.user.role !== requiredRole) {
+      router.push("/auth/access-denied")
+      return
+    }
+
+    if (requiredRoles && !requiredRoles.includes(session.user.role || "")) {
+      router.push("/auth/access-denied")
+      return
+    }
+
+    // Check permission-based access
+    if (requiredPermission) {
+      const userPermissions = session.user.permissions || []
+      if (!userPermissions.includes(requiredPermission)) {
+        router.push("/auth/access-denied")
+        return
+      }
+    }
+    {% endif %}
+  }, [status, session, router, redirectTo{% if auth_config_enable_role_management %}, requiredRole, requiredPermission, requiredRoles{% endif %}])
+
+  // Loading state
+  if (status === "loading") {
+    return fallback || <ProtectedRouteLoading />
+  }
+
+  // Not authenticated
+  if (!session) {
+    return fallback || <ProtectedRouteLoading />
+  }
+
+  {% if auth_config_enable_role_management %}
+  // Check access control
+  if (requiredRole && session.user.role !== requiredRole) {
+    return <AccessDenied requiredRole={requiredRole} userRole={session.user.role} />
+  }
+
+  if (requiredRoles && !requiredRoles.includes(session.user.role || "")) {
+    return <AccessDenied requiredRoles={requiredRoles} userRole={session.user.role} />
+  }
+
+  if (requiredPermission) {
+    const userPermissions = session.user.permissions || []
+    if (!userPermissions.includes(requiredPermission)) {
+      return <AccessDenied requiredPermission={requiredPermission} />
+    }
+  }
+  {% endif %}
+
+  return <>{children}</>
+}
+
+function ProtectedRouteLoading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+        <p className="mt-4 text-gray-600">Loading...</p>
+      </div>
+    </div>
+  )
+}
+
+{% if auth_config_enable_role_management %}
+function AccessDenied({ 
+  requiredRole, 
+  requiredRoles,
+  userRole, 
+  requiredPermission 
+}: { 
+  requiredRole?: string
+  requiredRoles?: string[]
+  userRole?: string
+  requiredPermission?: string
+}) {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center max-w-md">
+        <div className="text-6xl text-red-500 mb-4">🚫</div>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+        
+        {requiredRole && (
+          <p className="text-gray-600 mb-4">
+            This page requires <strong>{requiredRole}</strong> role.
+            {userRole && ` You have <strong>${userRole}</strong> role.`}
+          </p>
+        )}
+        
+        {requiredRoles && (
+          <p className="text-gray-600 mb-4">
+            This page requires one of these roles: <strong>{requiredRoles.join(', ')}</strong>.
+            {userRole && ` You have <strong>${userRole}</strong> role.`}
+          </p>
+        )}
+        
+        {requiredPermission && (
+          <p className="text-gray-600 mb-4">
+            This page requires <strong>{requiredPermission}</strong> permission.
+          </p>
+        )}
+        
+        <div className="space-x-4">
+          <button 
+            onClick={() => window.history.back()}
+            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+          >
+            Go Back
+          </button>
+          <button 
+            onClick={() => window.location.href = "/"}
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+          >
+            Go Home
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+{% endif %}
+
+// Higher-order component version
+export function withProtectedRoute<P extends object>(
+  Component: React.ComponentType<P>,
+  options?: {
+    {% if auth_config_enable_role_management %}
+    requiredRole?: string
+    requiredPermission?: string
+    requiredRoles?: string[]
+    {% endif %}
+    redirectTo?: string
+  }
+) {
+  return function ProtectedComponent(props: P) {
+    return (
+      <ProtectedRoute {...options}>
+        <Component {...props} />
+      </ProtectedRoute>
+    )
+  }
+}
+
+{% if auth_config_enable_role_management %}
+// Role checking hook
+export function useRole() {
+  const { data: session } = useSession()
+  
+  const hasRole = (role: string) => {
+    return session?.user?.role === role
+  }
+  
+  const hasPermission = (permission: string) => {
+    const permissions = session?.user?.permissions || []
+    return permissions.includes(permission)
+  }
+  
+  const hasAnyRole = (roles: string[]) => {
+    const userRole = session?.user?.role
+    return userRole ? roles.includes(userRole) : false
+  }
+  
+  return {
+    userRole: session?.user?.role,
+    userPermissions: session?.user?.permissions || [],
+    hasRole,
+    hasPermission,
+    hasAnyRole,
+  }
+}
+{% endif %}

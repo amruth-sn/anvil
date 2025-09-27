@@ -1,0 +1,175 @@
+import { getServerSession } from "next-auth/next"
+import { authConfig } from "./auth-config"
+import { redirect } from "next/navigation"
+
+// Server-side authentication utilities
+export async function getSession() {
+  return await getServerSession(authConfig)
+}
+
+export async function getCurrentUser() {
+  const session = await getSession()
+  return session?.user
+}
+
+export async function requireAuth() {
+  const session = await getSession()
+  if (!session || !session.user) {
+    redirect("/auth/signin")
+  }
+  return session
+}
+
+export async function requireUser() {
+  const session = await requireAuth()
+  return session.user
+}
+
+{% if auth_config_enable_role_management %}
+// Role and permission checking
+export async function requireRole(requiredRole: string) {
+  const user = await requireUser()
+  
+  if (user.role !== requiredRole) {
+    throw new Error(`Access denied - requires ${requiredRole} role, user has ${user.role}`)
+  }
+  
+  return user
+}
+
+export async function requirePermission(requiredPermission: string) {
+  const user = await requireUser()
+  const userPermissions = user.permissions || []
+  
+  if (!userPermissions.includes(requiredPermission)) {
+    throw new Error(`Access denied - requires ${requiredPermission} permission`)
+  }
+  
+  return user
+}
+
+export async function requireAnyRole(roles: string[]) {
+  const user = await requireUser()
+  
+  if (!roles.includes(user.role || "")) {
+    throw new Error(`Access denied - requires one of [${roles.join(', ')}] roles, user has ${user.role}`)
+  }
+  
+  return user
+}
+
+export async function hasRole(role: string): Promise<boolean> {
+  const user = await getCurrentUser()
+  return user?.role === role
+}
+
+export async function hasPermission(permission: string): Promise<boolean> {
+  const user = await getCurrentUser()
+  const permissions = user?.permissions || []
+  return permissions.includes(permission)
+}
+
+export async function hasAnyRole(roles: string[]): Promise<boolean> {
+  const user = await getCurrentUser()
+  return user?.role ? roles.includes(user.role) : false
+}
+
+// Common role definitions
+export const ROLES = {
+  ADMIN: 'admin',
+  USER: 'user',
+  MODERATOR: 'moderator',
+  PREMIUM: 'premium',
+} as const
+
+export const PERMISSIONS = {
+  READ_USERS: 'read:users',
+  WRITE_USERS: 'write:users',
+  DELETE_USERS: 'delete:users',
+  MANAGE_SETTINGS: 'manage:settings',
+  VIEW_ANALYTICS: 'view:analytics',
+} as const
+
+export type UserRole = typeof ROLES[keyof typeof ROLES]
+export type UserPermission = typeof PERMISSIONS[keyof typeof PERMISSIONS]
+{% endif %}
+
+// Session helpers
+export async function isAuthenticated(): Promise<boolean> {
+  const session = await getSession()
+  return !!session?.user
+}
+
+// API route protection helper
+export function createProtectedHandler(
+  handler: (session: any) => Promise<Response>,
+  options?: {
+    {% if auth_config_enable_role_management %}
+    requiredRole?: string
+    requiredPermission?: string
+    requiredRoles?: string[]
+    {% endif %}
+  }
+) {
+  return async (req: Request) => {
+    try {
+      const session = await getSession()
+      
+      if (!session || !session.user) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" }
+        })
+      }
+
+      {% if auth_config_enable_role_management %}
+      if (options?.requiredRole && session.user.role !== options.requiredRole) {
+        return new Response(JSON.stringify({ error: "Insufficient permissions" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json" }
+        })
+      }
+      
+      if (options?.requiredPermission) {
+        const permissions = session.user.permissions || []
+        if (!permissions.includes(options.requiredPermission)) {
+          return new Response(JSON.stringify({ error: "Insufficient permissions" }), {
+            status: 403,
+            headers: { "Content-Type": "application/json" }
+          })
+        }
+      }
+      
+      if (options?.requiredRoles && !options.requiredRoles.includes(session.user.role || "")) {
+        return new Response(JSON.stringify({ error: "Insufficient permissions" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json" }
+        })
+      }
+      {% endif %}
+      
+      return await handler(session)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unauthorized"
+      return new Response(JSON.stringify({ error: message }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" }
+      })
+    }
+  }
+}
+
+// Error classes
+export class AuthenticationError extends Error {
+  constructor(message: string = "Authentication required") {
+    super(message)
+    this.name = "AuthenticationError"
+  }
+}
+
+export class AuthorizationError extends Error {
+  constructor(message: string = "Insufficient permissions") {
+    super(message)
+    this.name = "AuthorizationError"
+  }
+}

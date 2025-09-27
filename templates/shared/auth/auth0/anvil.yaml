@@ -1,0 +1,118 @@
+name: "auth0-nextauth"
+description: "Auth0 authentication integration with NextAuth.js"
+version: "2.0.0"
+category: "auth"
+
+dependencies:
+  npm:
+    - "next-auth@^5.0.0-beta.4"
+    - "@auth/prisma-adapter"
+
+environment_variables:
+  - name: "AUTH0_CLIENT_ID"
+    description: "Auth0 application client ID"
+    required: true
+  - name: "AUTH0_CLIENT_SECRET"
+    description: "Auth0 application client secret"
+    required: true
+  - name: "AUTH0_ISSUER"
+    description: "Auth0 domain (https://your-domain.auth0.com)"
+    required: true
+  - name: "NEXTAUTH_SECRET"
+    description: "NextAuth secret for session encryption"
+    required: true
+  - name: "NEXTAUTH_URL"
+    description: "NextAuth canonical URL (https://yourdomain.com)"
+    required: true
+
+configuration_prompts:
+  - name: "auth0_domain"
+    prompt: "What's your Auth0 domain (without https://)?"
+    prompt_type: "text"
+    required: true
+    description: "Your Auth0 domain, e.g., 'your-app.auth0.com'"
+  - name: "enable_social_providers"
+    prompt: "Enable social login providers (Google, GitHub, etc.)?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Configure social login providers in Auth0"
+  - name: "enable_database_adapter"
+    prompt: "Use database adapter for session storage?"
+    prompt_type: "boolean"
+    default: "false"
+    description: "Store sessions in database instead of JWT tokens"
+  - name: "session_strategy"
+    prompt: "Choose session strategy:"
+    prompt_type: "select"
+    options: ["jwt", "database"]
+    default: "jwt"
+    description: "JWT for stateless sessions, database for persistent sessions"
+  - name: "enable_role_management"
+    prompt: "Enable role-based access control?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Add role and permission management"
+
+files:
+  - path: "app/api/auth/[...nextauth]/route.ts"
+    description: "NextAuth.js API route handler"
+  - path: "lib/auth-config.ts"
+    description: "NextAuth.js configuration with Auth0 provider"
+  - path: "lib/auth-utils.ts"
+    description: "Authentication utilities and session helpers"
+  - path: "components/auth/sign-in-button.tsx"
+    description: "Sign in button component"
+  - path: "components/auth/sign-out-button.tsx"
+    description: "Sign out button component"
+  - path: "components/auth/user-profile.tsx"
+    description: "User profile display component"
+  - path: "components/auth/protected-route.tsx"
+    description: "Protected route wrapper with role checking"
+  - path: "middleware.ts"
+    description: "NextAuth.js middleware for route protection"
+
+features:
+  - name: "authentication"
+    description: "Auth0 authentication with NextAuth.js"
+    enabled: true
+  - name: "social_login"
+    description: "Social login providers through Auth0"
+    enabled_when: "enable_social_providers == true"
+  - name: "role_based_access"
+    description: "Role and permission-based access control"
+    enabled_when: "enable_role_management == true"
+  - name: "database_sessions"
+    description: "Database-stored sessions with adapter"
+    enabled_when: "enable_database_adapter == true"
+  - name: "jwt_sessions"
+    description: "Stateless JWT sessions"
+    enabled_when: "session_strategy == 'jwt'"
+
+setup_instructions: |
+  🚀 Complete Auth0 + NextAuth Setup:
+  
+  1. Create Auth0 Application:
+     - Go to https://manage.auth0.com/dashboard
+     - Create new "Regular Web Application"
+     - Note your Domain, Client ID, and Client Secret
+  
+  2. Configure Auth0 Application:
+     - Add callback URLs: https://yourdomain.com/api/auth/callback/auth0
+     - Add logout URLs: https://yourdomain.com
+     - Add allowed web origins: https://yourdomain.com
+  
+  3. Set Up Social Providers (if enabled):
+     - Enable desired social connections in Auth0 Dashboard
+     - Configure each provider with your app credentials
+  
+  4. Environment Variables:
+     - Copy all Auth0 credentials to your .env.local
+     - Generate secure NEXTAUTH_SECRET: openssl rand -base64 32
+  
+  5. Database Setup (if using database sessions):
+     - Set up Prisma with session tables
+     - Configure database adapter in auth config
+  
+  6. Role Management (if enabled):
+     - Set up custom claims in Auth0 Rules/Actions
+     - Configure user roles and permissions

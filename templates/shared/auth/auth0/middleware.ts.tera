@@ -1,0 +1,94 @@
+import { withAuth } from "next-auth/middleware"
+import { NextResponse } from "next/server"
+
+export default withAuth(
+  function middleware(req) {
+    const token = req.nextauth.token
+    const isAuth = !!token
+    const isAuthPage = req.nextUrl.pathname.startsWith("/auth")
+    const isProtectedRoute = req.nextUrl.pathname.startsWith("/dashboard") ||
+                           req.nextUrl.pathname.startsWith("/profile") ||
+                           req.nextUrl.pathname.startsWith("/settings") ||
+                           req.nextUrl.pathname.startsWith("/api/protected")
+
+    // Redirect to login if accessing protected route without auth
+    if (isProtectedRoute && !isAuth) {
+      let from = req.nextUrl.pathname
+      if (req.nextUrl.search) {
+        from += req.nextUrl.search
+      }
+
+      return NextResponse.redirect(
+        new URL(`/auth/signin?callbackUrl=${encodeURIComponent(from)}`, req.url)
+      )
+    }
+
+    // Redirect to dashboard if accessing auth pages while authenticated
+    if (isAuthPage && isAuth) {
+      return NextResponse.redirect(new URL("/dashboard", req.url))
+    }
+
+    {% if auth_config_enable_role_management %}
+    // Role-based route protection
+    if (isAuth && token) {
+      const userRole = token.role as string
+      const pathname = req.nextUrl.pathname
+
+      // Admin-only routes
+      if (pathname.startsWith("/admin") && userRole !== "admin") {
+        return NextResponse.redirect(new URL("/auth/access-denied", req.url))
+      }
+
+      // Premium-only routes
+      if (pathname.startsWith("/premium") && !["premium", "admin"].includes(userRole)) {
+        return NextResponse.redirect(new URL("/auth/access-denied", req.url))
+      }
+
+      // Moderator routes
+      if (pathname.startsWith("/moderate") && !["moderator", "admin"].includes(userRole)) {
+        return NextResponse.redirect(new URL("/auth/access-denied", req.url))
+      }
+    }
+    {% endif %}
+
+    return NextResponse.next()
+  },
+  {
+    callbacks: {
+      authorized: ({ token, req }) => {
+        // Always allow access to auth pages
+        if (req.nextUrl.pathname.startsWith("/auth")) {
+          return true
+        }
+
+        // Allow access to public routes
+        const publicRoutes = ["/", "/about", "/contact", "/pricing", "/api/public"]
+        if (publicRoutes.includes(req.nextUrl.pathname)) {
+          return true
+        }
+
+        // Require authentication for protected routes
+        const protectedRoutes = ["/dashboard", "/profile", "/settings", "/api/protected"]
+        if (protectedRoutes.some(route => req.nextUrl.pathname.startsWith(route))) {
+          return !!token
+        }
+
+        // Default: allow access
+        return true
+      },
+    },
+  }
+)
+
+export const config = {
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public files (public folder)
+     */
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
+}
