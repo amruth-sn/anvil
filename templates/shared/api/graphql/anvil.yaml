@@ -1,0 +1,86 @@
+name: "graphql-api"
+description: "GraphQL API with Apollo Server and comprehensive tooling"
+version: "2.0.0"
+category: "api"
+
+dependencies:
+  npm:
+    - "@apollo/server@^4.10.0"
+    - "@apollo/client@^3.8.0"
+    - "graphql@^16.8.0"
+    - "graphql-tag@^2.12.0"
+    - "@graphql-tools/schema@^10.0.0"
+    - "@graphql-tools/load-files@^7.0.0"
+    - "@graphql-tools/merge@^9.0.0"
+    - "@graphql-codegen/cli@^5.0.0"
+    - "@graphql-codegen/typescript@^4.0.0"
+    - "@graphql-codegen/typescript-operations@^4.0.0"
+    - "@graphql-codegen/typescript-react-apollo@^4.0.0"
+    - "graphql-scalars@^1.22.0"
+
+environment_variables:
+  - name: "GRAPHQL_ENDPOINT"
+    description: "GraphQL endpoint URL"
+    required: false
+    default: "/api/graphql"
+
+configuration_prompts:
+  - name: "include_subscriptions"
+    prompt: "Include GraphQL subscriptions (WebSocket support)?"
+    prompt_type: "boolean"
+    default: "false"
+    description: "Enables real-time subscriptions via WebSockets"
+  - name: "include_codegen"
+    prompt: "Include GraphQL Code Generation?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Auto-generates TypeScript types from GraphQL schema"
+  - name: "include_playground"
+    prompt: "Include GraphQL Playground in development?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Enables GraphQL Playground for API exploration"
+  - name: "include_auth_directives"
+    prompt: "Include authentication directives?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Adds @auth and @requireRole directives"
+  - name: "include_caching"
+    prompt: "Include response caching?"
+    prompt_type: "boolean"
+    default: "true"
+    description: "Enables Redis-based response caching"
+
+files:
+  - path: "app/api/graphql/route.ts"
+    description: "Apollo Server integration with Next.js App Router"
+  - path: "lib/graphql/schema.ts"
+    description: "GraphQL schema definition and resolver setup"
+  - path: "lib/graphql/resolvers/index.ts"
+    description: "Main resolvers export"
+  - path: "lib/graphql/resolvers/users.ts"
+    description: "User-related GraphQL resolvers"
+  - path: "lib/graphql/typeDefs/index.ts"
+    description: "GraphQL type definitions"
+  - path: "lib/graphql/context.ts"
+    description: "GraphQL context creation"
+  - path: "lib/graphql/client.ts"
+    description: "Apollo Client configuration"
+  - path: "lib/graphql/apollo-provider.tsx"
+    description: "React Apollo Provider component"
+  - path: "codegen.yml"
+    description: "GraphQL Code Generator configuration"
+
+setup_instructions: |
+  🚀 GraphQL API Setup:
+  1. GraphQL endpoint available at /api/graphql
+  2. GraphQL Playground at /api/graphql (development only)
+  3. Type-safe queries and mutations with codegen
+  4. Apollo Client configured for React components
+  5. Subscriptions ready (if enabled)
+  
+  🔧 Usage:
+  - Run 'npm run codegen' to generate TypeScript types
+  - Use generated hooks in React components
+  - Query with Apollo Client or raw GraphQL
+  - Real-time updates via subscriptions (if enabled)

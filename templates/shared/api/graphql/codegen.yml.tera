@@ -1,0 +1,39 @@
+{% if api_config_include_codegen %}# GraphQL Code Generator configuration
+overwrite: true
+schema: "lib/graphql/typeDefs/**/*.ts"
+documents: "**/*.{ts,tsx,js,jsx,graphql,gql}"
+generates:
+  # Generate TypeScript types
+  lib/graphql/generated/types.ts:
+    plugins:
+      - "typescript"
+      - "typescript-operations"
+    config:
+      useIndexSignature: true
+      skipTypename: false
+      enumsAsTypes: true
+      declarationKind: 'interface'
+      
+  # Generate React Apollo hooks
+  lib/graphql/generated/hooks.ts:
+    plugins:
+      - "typescript"
+      - "typescript-operations"
+      - "typescript-react-apollo"
+    config:
+      withHooks: true
+      withComponent: false
+      withHOC: false
+      useIndexSignature: true
+      skipTypename: false
+      enumsAsTypes: true
+      
+  # Generate introspection result for Apollo Client
+  lib/graphql/generated/introspection.json:
+    plugins:
+      - "introspection"
+      
+hooks:
+  afterAllFileWrite:
+    - prettier --write{% else %}# GraphQL Code Generator is not enabled
+# To enable code generation, set include_codegen: true in your configuration{% endif %}

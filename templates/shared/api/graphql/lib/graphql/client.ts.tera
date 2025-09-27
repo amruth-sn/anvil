@@ -1,0 +1,160 @@
+import { ApolloClient, InMemoryCache, createHttpLink, from, NormalizedCacheObject } from '@apollo/client';
+import { setContext } from '@apollo/client/link/context';
+import { onError } from '@apollo/client/link/error';
+{% if api_config_include_subscriptions %}import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
+import { createClient } from 'graphql-ws';
+import { split } from '@apollo/client';
+import { getMainDefinition } from '@apollo/client/utilities';{% endif %}
+
+// HTTP Link
+const httpLink = createHttpLink({
+  uri: process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT || '/api/graphql',
+});
+
+// Authentication link
+const authLink = setContext((_, { headers }) => {
+  // Get the authentication token from local storage if it exists
+  const token = typeof window !== 'undefined' ? localStorage.getItem('auth-token') : null;
+  
+  return {
+    headers: {
+      ...headers,
+      authorization: token ? `Bearer ${token}` : '',
+    },
+  };
+});
+
+// Error link
+const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) => {
+  if (graphQLErrors) {
+    graphQLErrors.forEach(({ message, locations, path, extensions }) => {
+      console.error(
+        `GraphQL error: Message: ${message}, Location: ${locations}, Path: ${path}`,
+        extensions
+      );
+      
+      // Handle specific error cases
+      if (extensions?.code === 'UNAUTHENTICATED') {
+        // Redirect to login or refresh token
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('auth-token');
+          window.location.href = '/login';
+        }
+      }
+    });
+  }
+  
+  if (networkError) {
+    console.error(`Network error: ${networkError}`);
+    
+    // Handle network errors
+    if (networkError.statusCode === 401) {
+      // Unauthorized - redirect to login
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('auth-token');
+        window.location.href = '/login';
+      }
+    }
+  }
+});
+
+{% if api_config_include_subscriptions %}// WebSocket link for subscriptions
+const wsLink = typeof window !== 'undefined' ? new GraphQLWsLink(
+  createClient({
+    url: process.env.NEXT_PUBLIC_GRAPHQL_WS_ENDPOINT || 'ws://localhost:3000/api/graphql',
+    connectionParams: () => {
+      const token = localStorage.getItem('auth-token');
+      return {
+        authorization: token ? `Bearer ${token}` : '',
+      };
+    },
+  })
+) : null;
+
+// Split link to direct queries/mutations to HTTP and subscriptions to WebSocket
+const splitLink = typeof window !== 'undefined' && wsLink
+  ? split(
+      ({ query }) => {
+        const definition = getMainDefinition(query);
+        return (
+          definition.kind === 'OperationDefinition' &&
+          definition.operation === 'subscription'
+        );
+      },
+      wsLink,
+      from([errorLink, authLink, httpLink])
+    )
+  : from([errorLink, authLink, httpLink]);{% else %}// Create link chain
+const link = from([errorLink, authLink, httpLink]);{% endif %}
+
+// Apollo Client instance
+export const apolloClient = new ApolloClient({
+  {% if api_config_include_subscriptions %}link: splitLink,{% else %}link,{% endif %}
+  cache: new InMemoryCache({
+    typePolicies: {
+      Query: {
+        fields: {
+          users: {
+            // Cache policy for paginated users
+            keyArgs: ['input', ['search']], // Cache by search term
+            merge(existing, incoming, { args }) {
+              const page = args?.input?.page || 1;
+              
+              if (page === 1) {
+                // First page - replace existing
+                return incoming;
+              } else {
+                // Subsequent pages - merge with existing
+                return {
+                  ...incoming,
+                  users: [
+                    ...(existing?.users || []),
+                    ...incoming.users,
+                  ],
+                };
+              }
+            },
+          },
+        },
+      },
+    },
+  }),
+  defaultOptions: {
+    watchQuery: {
+      errorPolicy: 'all',
+      notifyOnNetworkStatusChange: true,
+    },
+    query: {
+      errorPolicy: 'all',
+    },
+    mutate: {
+      errorPolicy: 'all',
+    },
+  },
+  {% if api_config_include_playground %}connectToDevTools: process.env.NODE_ENV === 'development',{% endif %}
+});
+
+// Helper functions for client-side operations
+export function getAuthToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('auth-token');
+}
+
+export function setAuthToken(token: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('auth-token', token);
+  
+  // Reset Apollo cache to refetch with new token
+  apolloClient.resetStore();
+}
+
+export function removeAuthToken(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('auth-token');
+  
+  // Clear Apollo cache
+  apolloClient.clearStore();
+}
+
+// Export types for TypeScript
+export type { NormalizedCacheObject };

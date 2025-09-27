@@ -1,0 +1,43 @@
+import { NextRequest } from 'next/server';
+{% if api_config_include_auth_directives %}// Import your auth solution here
+// import { getServerSession } from 'next-auth';
+// import { authOptions } from '@/lib/auth';{% endif %}
+
+export interface GraphQLContext {
+  req: NextRequest;
+{% if api_config_include_auth_directives %}  user?: {
+    id: string;
+    email: string;
+    name: string;
+    role?: string;
+  } | null;{% endif %}
+}
+
+export async function createContext({ req }: { req: NextRequest }): Promise<GraphQLContext> {
+{% if api_config_include_auth_directives %}  // Get user session from your auth provider
+  // TODO: Replace with your actual auth logic
+  // const session = await getServerSession(authOptions);
+  // const user = session?.user ?? null;
+  
+  // Placeholder user extraction from authorization header
+  const authHeader = req.headers.get('authorization');
+  let user = null;
+  
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    // TODO: Validate JWT token and extract user info
+    // For demo purposes, we'll create a mock user
+    user = {
+      id: 'user-123',
+      email: 'user@example.com',
+      name: 'Demo User',
+      role: 'user', // or 'admin'
+    };
+  }
+  
+  return {
+    req,
+    user,
+  };{% else %}  return {
+    req,
+  };{% endif %}
+}

@@ -1,0 +1,32 @@
+import { ApolloServer } from '@apollo/server';
+import { startServerAndCreateNextHandler } from '@apollo/server/integrations/next';
+import { NextRequest } from 'next/server';
+import { schema } from '@/lib/graphql/schema';
+import { createContext } from '@/lib/graphql/context';
+
+const server = new ApolloServer({
+  schema,
+  {% if api_config_include_playground %}introspection: process.env.NODE_ENV === 'development',
+  {% endif %}formatError: (err) => {
+    // Log the error for debugging
+    console.error('GraphQL Error:', err);
+    
+    // Don't expose internal errors in production
+    if (process.env.NODE_ENV === 'production') {
+      // Return a generic error message for internal errors
+      if (err.message.includes('Internal server error')) {
+        return new Error('Something went wrong');
+      }
+    }
+    
+    return err;
+  },
+  {% if api_config_include_caching %}// Enable response caching
+  cache: 'bounded', // Use bounded cache{% endif %}
+});
+
+const handler = startServerAndCreateNextHandler<NextRequest>(server, {
+  context: createContext,
+});
+
+export { handler as GET, handler as POST };

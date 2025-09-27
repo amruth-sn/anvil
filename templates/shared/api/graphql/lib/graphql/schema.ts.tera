@@ -1,0 +1,18 @@
+import { makeExecutableSchema } from '@graphql-tools/schema';
+import { loadFilesSync } from '@graphql-tools/load-files';
+import { mergeTypeDefs, mergeResolvers } from '@graphql-tools/merge';
+import path from 'path';
+import { resolvers } from './resolvers';
+import { typeDefs } from './typeDefs';
+{% if api_config_include_auth_directives %}import { authDirectiveTransformer } from './directives/auth';{% endif %}
+
+// Create the executable schema
+let schema = makeExecutableSchema({
+  typeDefs,
+  resolvers,
+});
+
+{% if api_config_include_auth_directives %}// Apply auth directive transformer
+schema = authDirectiveTransformer(schema);{% endif %}
+
+export { schema };
