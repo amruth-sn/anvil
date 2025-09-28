@@ -30,8 +30,8 @@ const nextConfig: NextConfig = {
   //   }
   // }
   // If your repo name isn't your username, add these:
-  basePath: '/anvil/',
-  assetPrefix: '/anvil/',
+  basePath: '/anvil',
+  assetPrefix: '/anvil',
 };
 
 export default nextConfig;
