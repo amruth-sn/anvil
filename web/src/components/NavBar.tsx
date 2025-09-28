@@ -41,7 +41,7 @@ export default function NavBar() {
                     <NavigationMenuLink className="group flex items-start gap-3 rounded-md border border-border/60 p-3 hover:bg-accent/40 transition-colors">
                       <BookTemplate className="h-8 w-8" />
                       <div>
-                        <div className="font-medium">AI-powered templates</div>
+                        <div className="font-medium">Universal templates</div>
                         <p className="text-sm text-foreground/70">
                           Generate entire projects across stacks with one
                           prompt.
