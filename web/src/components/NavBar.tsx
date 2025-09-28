@@ -25,7 +25,7 @@ export default function NavBar() {
     <header className="fixed inset-x-0 top-0 z-50 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border/50">
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 group">
-          <img src="/anvil_white.png" alt="Anvil" className="h-6 w-6" />
+          <img src="anvil_white.png" alt="Anvil" className="h-6 w-6" />
           <span className="text-base font-semibold tracking-tight">Anvil</span>
         </Link>
 

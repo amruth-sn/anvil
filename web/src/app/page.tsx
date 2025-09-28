@@ -82,7 +82,7 @@ export default function Home() {
                 <span className="h-2 w-2 rounded-full bg-red-500" />
                 Built with Rust
                 <img
-                  src="/rustacean.png"
+                  src="rustacean.png"
                   alt="Ferris"
                   className="h-4 w-6 ml-1"
                 />
@@ -156,7 +156,7 @@ export default function Home() {
                   Run with peak performance
                 </CardTitle>
                 <div className="flex items-center gap-1 text-orange-300">
-                  <img src="/rustacean.png" alt="Ferris" className="h-8 w-12" />
+                  <img src="rustacean.png" alt="Ferris" className="h-8 w-12" />
                 </div>
               </CardHeader>
               <CardContent className="text-sm text-foreground/70">
@@ -194,7 +194,7 @@ export default function Home() {
       <footer className="border-t border-border/60 py-10">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-sm text-foreground/70">
-            <img src="/anvil_white.png" alt="Anvil" className="h-5 w-5" />
+            <img src="anvil_white.png" alt="Anvil" className="h-5 w-5" />
             <span>Anvil.</span>
             <span className="text-foreground/50">
               © {new Date().getFullYear()}
