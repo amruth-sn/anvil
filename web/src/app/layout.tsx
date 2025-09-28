@@ -4,8 +4,8 @@ import ErrorReporter from "@/components/ErrorReporter";
 import Script from "next/script";
 
 export const metadata: Metadata = {
-  title: "anvil — Universal Template Engine",
-  description: "An AI-powered, cross-language template engine for scaffolding entire projects. Built with Rust for performance and reliability.",
+  title: "Anvil — The world's first universal template engine",
+  description: "An AI-native, cross-language template engine for scaffolding entire projects. Built by Amruth Niranjan.",
 };
 
 export default function RootLayout({
