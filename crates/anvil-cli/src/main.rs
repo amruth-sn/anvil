@@ -179,8 +179,8 @@ async fn create_project(options: CreateOptions) -> Result<()> {
                 return Err(anyhow::anyhow!("Template must be specified when using --no-input"));
             }
             
-            println!("{} No template specified, using default 'rust-hello-world'", "ℹ️".bright_blue());
-            "rust-hello-world".to_string()
+            println!("{} No template specified, using default 'fullstack-saas'", "ℹ️".bright_blue());
+            "fullstack-saas".to_string()
         }
     };
     
