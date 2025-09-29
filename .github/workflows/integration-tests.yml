@@ -1,0 +1,324 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run integration tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  integration-tests:
+    name: Integration Tests
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        rust: [stable]
+        node: ['18', '20']
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: ${{ matrix.rust }}
+        components: rustfmt, clippy
+        
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node }}
+        cache: 'npm'
+        
+    - name: Install pnpm
+      uses: pnpm/action-setup@v2
+      with:
+        version: 8
+        
+    - name: Install Yarn
+      run: npm install -g yarn
+      
+    - name: Install Bun (Unix)
+      if: runner.os != 'Windows'
+      run: |
+        curl -fsSL https://bun.sh/install | bash
+        echo "$HOME/.bun/bin" >> $GITHUB_PATH
+        
+    - name: Install Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+        
+    - name: Cache Rust dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+          
+    - name: Build Anvil
+      run: cargo build --release
+      
+    - name: Run quick smoke tests
+      run: cargo test --test integration_test smoke_test_basic_generation --release
+      
+    - name: Run performance benchmarks
+      run: cargo test --test integration_test benchmark_generation_performance --release
+      
+    - name: Run template generation tests
+      run: cargo test --test integration_test template_generation --release
+      timeout-minutes: 20
+      
+    - name: Run shared component tests
+      run: cargo test --test integration_test shared_components --release  
+      timeout-minutes: 15
+      
+    - name: Run service compatibility tests
+      run: cargo test --test integration_test service_compatibility --release
+      timeout-minutes: 15
+      
+    - name: Run build verification tests
+      run: cargo test --test integration_test build_verification --release
+      timeout-minutes: 25
+      
+    - name: Run complete integration suite
+      run: cargo test --test integration_test run_complete_integration_test_suite --release
+      timeout-minutes: 45
+      
+    - name: Upload test artifacts on failure
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-artifacts-${{ matrix.os }}-node${{ matrix.node }}
+        path: |
+          target/debug/
+          /tmp/anvil-*
+          logs/
+        retention-days: 7
+
+  cross-platform-compatibility:
+    name: Cross-Platform Compatibility
+    runs-on: ubuntu-latest
+    needs: integration-tests
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: |
+          x86_64-unknown-linux-gnu
+          x86_64-apple-darwin
+          aarch64-apple-darwin
+          x86_64-pc-windows-msvc
+          
+    - name: Cache cross compilation
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target/
+        key: cross-compile-${{ hashFiles('**/Cargo.lock') }}
+        
+    - name: Cross compile for different targets
+      run: |
+        cargo build --target x86_64-unknown-linux-gnu --release
+        cargo build --target x86_64-pc-windows-msvc --release
+        
+    - name: Test template compatibility across platforms
+      run: |
+        # Test that templates generate correctly on different platforms
+        cargo test --test integration_test -- --test-threads=1
+        
+  template-validation:
+    name: Template Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        
+    - name: Validate all template YAML files
+      run: |
+        find templates/ -name "anvil.yaml" -exec echo "Validating {}" \; -exec cargo run -- validate {} \;
+        
+    - name: Check template file structure
+      run: |
+        # Verify that all templates have required files
+        for template in templates/*/; do
+          echo "Checking $template"
+          if [ ! -f "$template/anvil.yaml" ]; then
+            echo "❌ Missing anvil.yaml in $template"
+            exit 1
+          fi
+        done
+        
+    - name: Test template metadata
+      run: |
+        # Test that all templates have valid metadata
+        cargo test --test integration_test -- template_metadata --nocapture
+        
+  security-checks:
+    name: Security Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      
+    - name: Install security audit tools
+      run: |
+        cargo install cargo-audit
+        cargo install cargo-deny
+        
+    - name: Run security audit
+      run: cargo audit
+      
+    - name: Check for security advisories
+      run: cargo deny check advisories
+      
+    - name: Scan templates for sensitive data
+      run: |
+        # Check that templates don't contain hardcoded secrets
+        if grep -r -i "password\|secret\|key\|token" templates/ --include="*.tera" --include="*.yaml" | grep -v "YOUR_" | grep -v "REPLACE_"; then
+          echo "❌ Found potential hardcoded secrets in templates"
+          exit 1
+        fi
+        echo "✅ No hardcoded secrets found in templates"
+        
+  documentation-tests:
+    name: Documentation Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      
+    - name: Test documentation examples
+      run: cargo test --doc
+      
+    - name: Check that generated READMEs are valid
+      run: |
+        cargo build --release
+        ./target/release/anvil create test-readme-check --template fullstack-saas --no-input
+        if [ ! -f test-readme-check/README.md ]; then
+          echo "❌ README.md not generated"
+          exit 1
+        fi
+        echo "✅ README.md generated successfully"
+        
+    - name: Validate template documentation
+      run: |
+        # Check that all templates have proper documentation
+        for template in templates/*/; do
+          if [ -f "$template/README.md.tera" ]; then
+            echo "✅ $template has documentation"
+          else
+            echo "⚠️  $template missing README.md.tera"
+          fi
+        done
+
+  performance-tests:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      
+    - name: Build optimized binary
+      run: cargo build --release
+      
+    - name: Run performance benchmarks
+      run: |
+        cargo test --test integration_test benchmark_generation_performance --release -- --nocapture
+        
+    - name: Memory usage test
+      run: |
+        # Test memory usage during generation
+        valgrind --tool=massif --pages-as-heap=yes \
+          ./target/release/anvil create memory-test --template fullstack-saas --no-input \
+          2>&1 | tee memory-report.txt || true
+        
+    - name: Concurrent generation test
+      run: |
+        # Test that multiple generations can run concurrently
+        for i in {1..5}; do
+          ./target/release/anvil create "concurrent-test-$i" --template fullstack-saas --no-input &
+        done
+        wait
+        echo "✅ Concurrent generation completed"
+
+  notification:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: [integration-tests, cross-platform-compatibility, template-validation, security-checks, documentation-tests, performance-tests]
+    if: failure() && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Send notification
+      run: |
+        echo "Integration tests failed on main branch"
+        # Add notification logic here (Slack, Discord, email, etc.)
+        
+  summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [integration-tests, cross-platform-compatibility, template-validation, security-checks, documentation-tests, performance-tests]
+    if: always()
+    
+    steps:
+    - name: Print summary
+      run: |
+        echo "🧪 Integration Test Suite Summary"
+        echo "================================"
+        echo "Integration Tests: ${{ needs.integration-tests.result }}"
+        echo "Cross-Platform: ${{ needs.cross-platform-compatibility.result }}"
+        echo "Template Validation: ${{ needs.template-validation.result }}"
+        echo "Security Checks: ${{ needs.security-checks.result }}"
+        echo "Documentation: ${{ needs.documentation-tests.result }}"
+        echo "Performance: ${{ needs.performance-tests.result }}"
+        
+        if [[ "${{ needs.integration-tests.result }}" == "success" && 
+              "${{ needs.template-validation.result }}" == "success" && 
+              "${{ needs.security-checks.result }}" == "success" ]]; then
+          echo "✅ All critical tests passed!"
+        else
+          echo "❌ Some critical tests failed"
+        fi

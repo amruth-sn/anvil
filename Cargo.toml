@@ -17,5 +17,16 @@ repository = "https://github.com/amruth-sn/anvil"
 tokio = { version = "1.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
+serde_json = "1.0"
 anyhow = "1.0"
 thiserror = "1.0"
+tera = "1.19"
+walkdir = "2.4"
+tempfile = "3.8"
+clap = { version = "4.4", features = ["derive"] }
+
+# Development and testing dependencies
+tokio-test = "0.4"
+futures = "0.3"
+reqwest = { version = "0.11", features = ["json"] }
+num_cpus = "1.16"
