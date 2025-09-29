@@ -480,7 +480,7 @@ mod tests {
 
     #[test]
     fn test_template_engine_creation() {
-        let engine = TemplateEngine::new_for_testing().unwrap();
+        let _engine = TemplateEngine::new_for_testing().unwrap();
     }
 
     #[test]

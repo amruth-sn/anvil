@@ -213,6 +213,7 @@ mod tests {
                 },
                 ProcessedFile {
                     output_path: PathBuf::from("src/lib.rs"),
+                    content: "// Library code".to_string(),
                     executable: false,
                 },
                 ProcessedFile {

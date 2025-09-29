@@ -494,6 +494,9 @@ features:
             features: vec![],
             hooks: None,
             min_anvil_version: "0.1.0".to_string(),
+            services: vec![],
+            composition: None,
+            service_combinations: vec![],
         };
         
         assert!(config.validate().is_ok());
