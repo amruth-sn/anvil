@@ -1,8 +1,9 @@
 {
-  "name": "{{ project_name }}",
+  "name": "{{ project_name | lower | replace(from=' ', to='-') }}",
   "version": "0.1.0",
-  "description": "{{ project_description | default(value="A modern SaaS application") }}",
+  "description": "{{ project_description | default(value='A modern SaaS application built with Anvil') }}",
   "private": true,
+  {% if author_name %}"author": "{{ author_name }}",{% endif %}
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -11,32 +12,46 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "next": "14.0.4",
-    "react": "^18",
-    "react-dom": "^18",
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "typescript": "^5",
+    "next": "^14.0.4",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
     "tailwindcss": "^3.3.0",
-    "autoprefixer": "^10.0.1",
-    "postcss": "^8",
-    "clsx": "^2.0.0",
+    "autoprefixer": "^10.0.1", 
+    "postcss": "^8.0.0",
+    {% if ui_library == "shadcn/ui" %}"@radix-ui/react-avatar": "^1.0.4",
+    "@radix-ui/react-dialog": "^1.0.5",
+    "@radix-ui/react-dropdown-menu": "^2.0.6",
+    "@radix-ui/react-label": "^2.0.2",
+    "@radix-ui/react-select": "^2.0.0",
+    "@radix-ui/react-separator": "^1.0.3",
+    "@radix-ui/react-slot": "^1.0.2",
+    "@radix-ui/react-tabs": "^1.0.4",
     "class-variance-authority": "^0.7.0",
+    "clsx": "^2.0.0",
     "lucide-react": "^0.294.0",
-    "@radix-ui/react-slot": "^1.0.2"{% if merged_dependencies.npm %}{% for dep in merged_dependencies.npm %},
-    "{{ dep.name }}": "{{ dep.version }}"{% endfor %}{% endif %}
+    "tailwind-merge": "^2.0.0",
+    "tailwindcss-animate": "^1.0.7",{% elif ui_library == "nextui" %}"@nextui-org/react": "^2.2.0",
+    "framer-motion": "^10.16.0",{% else %}"clsx": "^2.0.0",
+    "lucide-react": "^0.294.0",{% endif %}
+    "zod": "^3.22.0"
   },
   "devDependencies": {
-    "eslint": "^8",
-    "eslint-config-next": "14.0.4",
-    "@tailwindcss/typography": "^0.5.10"
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "typescript": "^5.0.0",
+    "eslint": "^8.0.0",
+    "eslint-config-next": "^14.0.4"
   },
   "keywords": [
     "nextjs",
-    "typescript", 
-    "saas",
-    "tailwindcss"
+    "typescript",
+    "saas", 
+    "tailwindcss",
+    "anvil"
   ],
-  "author": "{{ author_name | default(value="") }}"
+  "engines": {
+    "node": ">=18.0.0",
+    "{{ package_manager }}": ">=8.0.0"
+  }
 }
