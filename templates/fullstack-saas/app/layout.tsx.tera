@@ -1,12 +1,9 @@
-import './globals.css'
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-
-const inter = Inter({ subsets: ['latin'] })
+import './globals.css'
 
 export const metadata: Metadata = {
   title: '{{ project_name }}',
-  description: '{{ project_description | default(value="A modern SaaS application") }}',
+  description: '{{ project_description | default(value="A modern SaaS application built with Anvil") }}',
 }
 
 export default function RootLayout({
@@ -16,10 +13,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-          {children}
-        </main>
+      <body className="antialiased">
+        {children}
       </body>
     </html>
   )
