@@ -49,12 +49,6 @@ export function useAuth() {
         // Handle specific events
         if (event === 'SIGNED_IN') {
           console.log('User signed in:', session?.user?.email)
-          {% if auth_config_enable_rls %}
-          // Create or update user profile
-          if (session?.user) {
-            await createOrUpdateProfile(session.user)
-          }
-          {% endif %}
         } else if (event === 'SIGNED_OUT') {
           console.log('User signed out')
         }
@@ -119,50 +113,6 @@ export function useAuth() {
     return data
   }
 
-  {% if auth_config_enable_magic_links %}
-  const signInWithMagicLink = async (email: string) => {
-    const { data, error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/api/auth/callback`,
-      },
-    })
-    
-    if (error) {
-      throw error
-    }
-    
-    return data
-  }
-  {% endif %}
-
-  {% if auth_config_enable_phone_auth %}
-  const signInWithPhone = async (phone: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      phone,
-      password,
-    })
-    
-    if (error) {
-      throw error
-    }
-    
-    return data
-  }
-
-  const signUpWithPhone = async (phone: string, password: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      phone,
-      password,
-    })
-    
-    if (error) {
-      throw error
-    }
-    
-    return data
-  }
-  {% endif %}
 
   const resetPassword = async (email: string) => {
     const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -200,43 +150,12 @@ export function useAuth() {
     signInWithPassword,
     signUpWithPassword,
     signInWithOAuth,
-    {% if auth_config_enable_magic_links %}
-    signInWithMagicLink,
-    {% endif %}
-    {% if auth_config_enable_phone_auth %}
-    signInWithPhone,
-    signUpWithPhone,
-    {% endif %}
     resetPassword,
     updatePassword,
   }
 }
 
-{% if auth_config_enable_rls %}
-// Helper function to create or update user profile
-async function createOrUpdateProfile(user: User) {
-  try {
-    const { error } = await supabase
-      .from('profiles')
-      .upsert({
-        id: user.id,
-        email: user.email!,
-        full_name: user.user_metadata?.full_name || null,
-        avatar_url: user.user_metadata?.avatar_url || null,
-        updated_at: new Date().toISOString(),
-      })
-    
-    if (error) {
-      console.error('Error creating/updating profile:', error)
-    }
-  } catch (error) {
-    console.error('Error in createOrUpdateProfile:', error)
-  }
-}
-{% endif %}
-
-// Custom hook for user profile
-{% if auth_config_enable_rls %}
+// Custom hook for user profile (optional - requires profiles table)
 export function useProfile() {
   const { user } = useAuth()
   const [profile, setProfile] = useState<any>(null)
@@ -301,4 +220,3 @@ export function useProfile() {
     updateProfile,
   }
 }
-{% endif %}

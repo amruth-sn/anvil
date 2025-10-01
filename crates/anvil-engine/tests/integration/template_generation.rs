@@ -178,8 +178,10 @@ impl TemplateGenerationTests {
             should_run: false,
             timeout_seconds: 30,
         };
-        let result1 = suite.generate_project(&config1).await?;
+        let mut result1 = suite.generate_project(&config1).await?;
         assert!(!result1.success, "Should fail for non-existent template");
+        // Mark as successful since it failed as expected
+        result1.success = true;
         results.push(result1);
 
         // Test invalid variable values

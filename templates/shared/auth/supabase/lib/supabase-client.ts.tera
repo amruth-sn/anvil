@@ -13,67 +13,27 @@ export const supabaseClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   {
     auth: {
-      {% if auth_config_enable_realtime %}
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: true,
-      {% endif %}
       flowType: 'pkce',
     },
-    {% if auth_config_enable_realtime %}
     realtime: {
       params: {
         eventsPerSecond: 10,
       },
     },
-    {% endif %}
   }
 )
 
-// Database types (you should generate these with Supabase CLI)
+// Database types (generate these with: npx supabase gen types typescript)
 export type Database = {
   public: {
-    Tables: {
-      profiles: {
-        Row: {
-          id: string
-          email: string
-          full_name: string | null
-          avatar_url: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id: string
-          email: string
-          full_name?: string | null
-          avatar_url?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          email?: string
-          full_name?: string | null
-          avatar_url?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-      }
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      [_ in never]: never
-    }
-    Enums: {
-      [_ in never]: never
-    }
+    Tables: Record<string, any>
+    Views: Record<string, never>
+    Functions: Record<string, never>
+    Enums: Record<string, never>
   }
 }
-
-// Typed Supabase client
-export type TypedSupabaseClient = ReturnType<typeof createClientComponentClient<Database>>
 
 export default supabase

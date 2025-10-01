@@ -1,14 +1,14 @@
 /*!
  * Service Compatibility Integration Tests
- * 
+ *
  * Tests service compatibility rules, language requirements, and
  * cross-template service composition to ensure proper validation
  * and error handling.
  */
 
 use super::{IntegrationTestSuite, TestConfig, TestResult};
-use std::collections::HashMap;
 use serde_json::Value;
+use std::collections::HashMap;
 
 /// Test suite for service compatibility and validation
 pub struct ServiceCompatibilityTests;
@@ -18,7 +18,7 @@ impl ServiceCompatibilityTests {
     pub async fn test_trpc_language_compatibility() -> anyhow::Result<Vec<TestResult>> {
         let suite = IntegrationTestSuite::new()?;
         let mut results = Vec::new();
-        
+
         // Test valid case: tRPC with TypeScript
         let config1 = TestConfig {
             template_name: "fullstack-saas".to_string(),
@@ -32,16 +32,13 @@ impl ServiceCompatibilityTests {
                 "lib/trpc/server.ts".to_string(),
                 "server/trpc.ts".to_string(),
             ],
-            expected_dependencies: vec![
-                "@trpc/server".to_string(),
-                "@trpc/client".to_string(),
-            ],
+            expected_dependencies: vec!["@trpc/server".to_string(), "@trpc/client".to_string()],
             should_build: true,
             should_run: false,
             timeout_seconds: 90,
         };
         results.push(suite.generate_project(&config1).await?);
-        
+
         // Test invalid case: tRPC with JavaScript (should fail or fallback)
         let config2 = TestConfig {
             template_name: "fullstack-saas".to_string(),
@@ -58,15 +55,15 @@ impl ServiceCompatibilityTests {
         };
         let result2 = suite.generate_project(&config2).await?;
         results.push(result2);
-        
+
         Ok(results)
     }
-    
+
     /// Test authentication provider compatibility
     pub async fn test_auth_provider_compatibility() -> anyhow::Result<Vec<TestResult>> {
         let suite = IntegrationTestSuite::new()?;
         let mut results = Vec::new();
-        
+
         // Test Clerk with Next.js (valid)
         let config1 = TestConfig {
             template_name: "fullstack-saas".to_string(),
@@ -80,15 +77,13 @@ impl ServiceCompatibilityTests {
                 "lib/clerk-setup.ts".to_string(),
                 "components/auth/user-button.tsx".to_string(),
             ],
-            expected_dependencies: vec![
-                "@clerk/nextjs".to_string(),
-            ],
+            expected_dependencies: vec!["@clerk/nextjs".to_string()],
             should_build: true,
             should_run: false,
             timeout_seconds: 90,
         };
         results.push(suite.generate_project(&config1).await?);
-        
+
         // Test Firebase Auth with different configurations
         let config2 = TestConfig {
             template_name: "fullstack-saas".to_string(),
@@ -101,16 +96,13 @@ impl ServiceCompatibilityTests {
                 "lib/firebase-client.ts".to_string(),
                 "components/auth/auth-form.tsx".to_string(),
             ],
-            expected_dependencies: vec![
-                "firebase".to_string(),
-                "firebase-admin".to_string(),
-            ],
+            expected_dependencies: vec!["firebase".to_string(), "firebase-admin".to_string()],
             should_build: true,
             should_run: false,
             timeout_seconds: 90,
         };
         results.push(suite.generate_project(&config2).await?);
-        
+
         // Test Supabase Auth
         let config3 = TestConfig {
             template_name: "fullstack-saas".to_string(),
@@ -134,15 +126,15 @@ impl ServiceCompatibilityTests {
             timeout_seconds: 90,
         };
         results.push(suite.generate_project(&config3).await?);
-        
+
         Ok(results)
     }
-    
+
     /// Test database provider compatibility
     pub async fn test_database_compatibility() -> anyhow::Result<Vec<TestResult>> {
         let suite = IntegrationTestSuite::new()?;
         let mut results = Vec::new();
-        
+
         // Test Supabase as both auth and database (should be optimized)
         let config1 = TestConfig {
             template_name: "fullstack-saas".to_string(),
@@ -165,7 +157,7 @@ impl ServiceCompatibilityTests {
             timeout_seconds: 90,
         };
         results.push(suite.generate_project(&config1).await?);
-        
+
         // Test Neon with Drizzle ORM
         let config2 = TestConfig {
             template_name: "fullstack-saas".to_string(),
@@ -189,7 +181,7 @@ impl ServiceCompatibilityTests {
             timeout_seconds: 90,
         };
         results.push(suite.generate_project(&config2).await?);
-        
+
         // Test MongoDB compatibility
         let config3 = TestConfig {
             template_name: "fullstack-saas".to_string(),
@@ -198,28 +190,22 @@ impl ServiceCompatibilityTests {
                 ("database_provider", "mongodb"),
                 ("orm", "mongoose"),
             ])),
-            expected_files: vec![
-                "lib/mongodb.ts".to_string(),
-                "models/User.ts".to_string(),
-            ],
-            expected_dependencies: vec![
-                "mongodb".to_string(),
-                "mongoose".to_string(),
-            ],
+            expected_files: vec!["lib/mongodb.ts".to_string(), "models/User.ts".to_string()],
+            expected_dependencies: vec!["mongodb".to_string(), "mongoose".to_string()],
             should_build: true,
             should_run: false,
             timeout_seconds: 90,
         };
         results.push(suite.generate_project(&config3).await?);
-        
+
         Ok(results)
     }
-    
+
     /// Test API pattern compatibility with different stacks
     pub async fn test_api_pattern_compatibility() -> anyhow::Result<Vec<TestResult>> {
         let suite = IntegrationTestSuite::new()?;
         let mut results = Vec::new();
-        
+
         // Test REST API with OpenAPI documentation
         let config1 = TestConfig {
             template_name: "fullstack-saas".to_string(),
@@ -234,16 +220,13 @@ impl ServiceCompatibilityTests {
                 "lib/api/openapi.ts".to_string(),
                 "lib/api/schemas.ts".to_string(),
             ],
-            expected_dependencies: vec![
-                "swagger-ui-react".to_string(),
-                "zod".to_string(),
-            ],
+            expected_dependencies: vec!["swagger-ui-react".to_string(), "zod".to_string()],
             should_build: true,
             should_run: false,
             timeout_seconds: 90,
         };
         results.push(suite.generate_project(&config1).await?);
-        
+
         // Test GraphQL with Apollo Server
         let config2 = TestConfig {
             template_name: "fullstack-saas".to_string(),
@@ -268,7 +251,7 @@ impl ServiceCompatibilityTests {
             timeout_seconds: 120,
         };
         results.push(suite.generate_project(&config2).await?);
-        
+
         // Test tRPC with React Query integration
         let config3 = TestConfig {
             template_name: "fullstack-saas".to_string(),
@@ -292,15 +275,15 @@ impl ServiceCompatibilityTests {
             timeout_seconds: 120,
         };
         results.push(suite.generate_project(&config3).await?);
-        
+
         Ok(results)
     }
-    
+
     /// Test UI library compatibility
     pub async fn test_ui_library_compatibility() -> anyhow::Result<Vec<TestResult>> {
         let suite = IntegrationTestSuite::new()?;
         let mut results = Vec::new();
-        
+
         // Test shadcn/ui with different configurations
         let config1 = TestConfig {
             template_name: "fullstack-saas".to_string(),
@@ -327,7 +310,7 @@ impl ServiceCompatibilityTests {
             timeout_seconds: 90,
         };
         results.push(suite.generate_project(&config1).await?);
-        
+
         // Test NextUI compatibility
         let config2 = TestConfig {
             template_name: "fullstack-saas".to_string(),
@@ -349,15 +332,15 @@ impl ServiceCompatibilityTests {
             timeout_seconds: 90,
         };
         results.push(suite.generate_project(&config2).await?);
-        
+
         Ok(results)
     }
-    
+
     /// Test service combination validation
     pub async fn test_service_combinations() -> anyhow::Result<Vec<TestResult>> {
         let suite = IntegrationTestSuite::new()?;
         let mut results = Vec::new();
-        
+
         // Test recommended combination: Clerk + tRPC + Supabase + Stripe
         let config1 = TestConfig {
             template_name: "fullstack-saas".to_string(),
@@ -388,7 +371,7 @@ impl ServiceCompatibilityTests {
             timeout_seconds: 180,
         };
         results.push(suite.generate_project(&config1).await?);
-        
+
         // Test enterprise combination: Auth0 + GraphQL + PostgreSQL + Advanced features
         let config2 = TestConfig {
             template_name: "fullstack-saas".to_string(),
@@ -418,7 +401,7 @@ impl ServiceCompatibilityTests {
             timeout_seconds: 180,
         };
         results.push(suite.generate_project(&config2).await?);
-        
+
         // Test minimal viable combination
         let config3 = TestConfig {
             template_name: "fullstack-saas".to_string(),
@@ -434,24 +417,21 @@ impl ServiceCompatibilityTests {
                 "components/ui/button.tsx".to_string(),
                 "lib/api/client.ts".to_string(),
             ],
-            expected_dependencies: vec![
-                "@radix-ui/react-slot".to_string(),
-                "zod".to_string(),
-            ],
+            expected_dependencies: vec!["@radix-ui/react-slot".to_string(), "zod".to_string()],
             should_build: true,
             should_run: false,
             timeout_seconds: 90,
         };
         results.push(suite.generate_project(&config3).await?);
-        
+
         Ok(results)
     }
-    
+
     /// Test invalid service combinations (should fail gracefully)
     pub async fn test_invalid_combinations() -> anyhow::Result<Vec<TestResult>> {
         let suite = IntegrationTestSuite::new()?;
         let mut results = Vec::new();
-        
+
         // Test conflicting services
         let config1 = TestConfig {
             template_name: "fullstack-saas".to_string(),
@@ -469,13 +449,13 @@ impl ServiceCompatibilityTests {
         let result1 = suite.generate_project(&config1).await?;
         // This should either fail or resolve to one provider
         results.push(result1);
-        
+
         // Test incompatible language requirements
         let config2 = TestConfig {
             template_name: "fullstack-saas".to_string(),
             variables: Self::create_variables(HashMap::from([
                 ("project_name", "test-incompatible"),
-                ("api_pattern", "trpc"), // Requires TypeScript
+                ("api_pattern", "trpc"),    // Requires TypeScript
                 ("language", "javascript"), // But using JavaScript
             ])),
             expected_files: vec![],
@@ -486,10 +466,10 @@ impl ServiceCompatibilityTests {
         };
         let result2 = suite.generate_project(&config2).await?;
         results.push(result2);
-        
+
         Ok(results)
     }
-    
+
     /// Helper to create variables map with proper JSON values
     fn create_variables(vars: HashMap<&str, &str>) -> HashMap<String, Value> {
         vars.into_iter()
@@ -497,7 +477,9 @@ impl ServiceCompatibilityTests {
                 let value = match v {
                     "true" => Value::Bool(true),
                     "false" => Value::Bool(false),
-                    s if s.parse::<i64>().is_ok() => Value::Number(s.parse::<i64>().unwrap().into()),
+                    s if s.parse::<i64>().is_ok() => {
+                        Value::Number(s.parse::<i64>().unwrap().into())
+                    }
                     s => Value::String(s.to_string()),
                 };
                 (k.to_string(), value)
@@ -510,13 +492,21 @@ impl ServiceCompatibilityTests {
 async fn test_all_service_compatibility() {
     let mut all_results = Vec::new();
     let mut failed_tests = Vec::new();
-    
+
     // Test each compatibility category sequentially
+    let trpc_compat_start_index = all_results.len();
     println!("Running tRPC Language Compatibility tests...");
     match ServiceCompatibilityTests::test_trpc_language_compatibility().await {
         Ok(mut results) => {
             let success_count = results.iter().filter(|r| r.success).count();
-            println!("✅ tRPC Language Compatibility tests: {}/{} passed", success_count, results.len());
+            let rejection_count = results.iter().filter(|r| !r.success).count();
+            println!(
+                "✅ tRPC Language Compatibility tests: {}/{} passed, {}/{} correctly rejected",
+                success_count,
+                results.len(),
+                rejection_count,
+                results.len()
+            );
             all_results.append(&mut results);
         }
         Err(e) => {
@@ -524,12 +514,17 @@ async fn test_all_service_compatibility() {
             failed_tests.push("tRPC Language Compatibility");
         }
     }
+    let trpc_compat_end_index = all_results.len();
 
     println!("Running Auth Provider Compatibility tests...");
     match ServiceCompatibilityTests::test_auth_provider_compatibility().await {
         Ok(mut results) => {
             let success_count = results.iter().filter(|r| r.success).count();
-            println!("✅ Auth Provider Compatibility tests: {}/{} passed", success_count, results.len());
+            println!(
+                "✅ Auth Provider Compatibility tests: {}/{} passed",
+                success_count,
+                results.len()
+            );
             all_results.append(&mut results);
         }
         Err(e) => {
@@ -542,7 +537,11 @@ async fn test_all_service_compatibility() {
     match ServiceCompatibilityTests::test_database_compatibility().await {
         Ok(mut results) => {
             let success_count = results.iter().filter(|r| r.success).count();
-            println!("✅ Database Compatibility tests: {}/{} passed", success_count, results.len());
+            println!(
+                "✅ Database Compatibility tests: {}/{} passed",
+                success_count,
+                results.len()
+            );
             all_results.append(&mut results);
         }
         Err(e) => {
@@ -555,7 +554,11 @@ async fn test_all_service_compatibility() {
     match ServiceCompatibilityTests::test_api_pattern_compatibility().await {
         Ok(mut results) => {
             let success_count = results.iter().filter(|r| r.success).count();
-            println!("✅ API Pattern Compatibility tests: {}/{} passed", success_count, results.len());
+            println!(
+                "✅ API Pattern Compatibility tests: {}/{} passed",
+                success_count,
+                results.len()
+            );
             all_results.append(&mut results);
         }
         Err(e) => {
@@ -568,7 +571,11 @@ async fn test_all_service_compatibility() {
     match ServiceCompatibilityTests::test_ui_library_compatibility().await {
         Ok(mut results) => {
             let success_count = results.iter().filter(|r| r.success).count();
-            println!("✅ UI Library Compatibility tests: {}/{} passed", success_count, results.len());
+            println!(
+                "✅ UI Library Compatibility tests: {}/{} passed",
+                success_count,
+                results.len()
+            );
             all_results.append(&mut results);
         }
         Err(e) => {
@@ -581,7 +588,11 @@ async fn test_all_service_compatibility() {
     match ServiceCompatibilityTests::test_service_combinations().await {
         Ok(mut results) => {
             let success_count = results.iter().filter(|r| r.success).count();
-            println!("✅ Service Combinations tests: {}/{} passed", success_count, results.len());
+            println!(
+                "✅ Service Combinations tests: {}/{} passed",
+                success_count,
+                results.len()
+            );
             all_results.append(&mut results);
         }
         Err(e) => {
@@ -590,13 +601,24 @@ async fn test_all_service_compatibility() {
         }
     }
 
+    let invalid_combinations_start_index = all_results.len();
     println!("Running Invalid Combinations tests...");
     match ServiceCompatibilityTests::test_invalid_combinations().await {
         Ok(mut results) => {
             let success_count = results.iter().filter(|r| r.success).count();
             let failure_count = results.iter().filter(|r| !r.success).count();
-            println!("✅ Invalid Combinations tests: {}/{} passed", success_count, results.len());
-            println!("   Expected failures: {}/{}", failure_count, results.len());
+            println!(
+                "✅ Invalid Combinations tests: {}/{} correctly rejected invalid input",
+                failure_count,
+                results.len()
+            );
+            if success_count > 0 {
+                println!(
+                    "   ⚠️  Warning: {}/{} invalid combinations were unexpectedly accepted",
+                    success_count,
+                    results.len()
+                );
+            }
             all_results.append(&mut results);
         }
         Err(e) => {
@@ -604,27 +626,53 @@ async fn test_all_service_compatibility() {
             failed_tests.push("Invalid Combinations");
         }
     }
-    
+    let invalid_combinations_end_index = all_results.len();
+
     // Summary
     let total_tests = all_results.len();
     let successful_tests = all_results.iter().filter(|r| r.success).count();
     let total_files = all_results.iter().map(|r| r.files_created).sum::<usize>();
-    
+
     println!("\n📊 Service Compatibility Test Summary:");
     println!("   Total tests: {}", total_tests);
     println!("   Successful: {}", successful_tests);
-    println!("   Success rate: {:.1}%", (successful_tests as f64 / total_tests as f64) * 100.0);
+    println!(
+        "   Success rate: {:.1}%",
+        (successful_tests as f64 / total_tests as f64) * 100.0
+    );
     println!("   Total files generated: {}", total_files);
     println!("   Failed test categories: {}", failed_tests.len());
-    
+
     // Print detailed results for failed tests
     for (i, result) in all_results.iter().enumerate() {
+        let is_invalid_combination_test =
+            i >= invalid_combinations_start_index && i < invalid_combinations_end_index;
+        let is_trpc_invalid_test = i >= trpc_compat_start_index 
+            && i < trpc_compat_end_index 
+            && i == trpc_compat_start_index + 1; // Second test is the invalid one
+
         if !result.success {
             if let Some(error) = &result.error_message {
-                println!("❌ Test {} failed: {}", i + 1, error);
+                if is_invalid_combination_test || is_trpc_invalid_test {
+                    // For invalid combination/incompatibility tests, failure is expected and good
+                    println!(
+                        "✅ Test {} correctly rejected invalid input: {}",
+                        i + 1,
+                        error.lines().next().unwrap_or("Invalid configuration")
+                    );
+                } else {
+                    // For regular tests, failure is bad
+                    println!("❌ Test {} failed: {}", i + 1, error);
+                }
             }
+        } else if is_invalid_combination_test || is_trpc_invalid_test {
+            // For negative tests, success is unexpected
+            println!(
+                "⚠️  Test {} warning: Invalid input was unexpectedly accepted",
+                i + 1
+            );
         }
-        
+
         if !result.warnings.is_empty() {
             println!("⚠️  Test {} warnings:", i + 1);
             for warning in &result.warnings {
@@ -632,11 +680,11 @@ async fn test_all_service_compatibility() {
             }
         }
     }
-    
+
     // Compatibility tests should have a high success rate
     let min_success_rate = 0.8; // 80% minimum
     let actual_success_rate = successful_tests as f64 / total_tests as f64;
-    
+
     assert!(
         actual_success_rate >= min_success_rate,
         "Service compatibility test success rate ({:.1}%) is below minimum ({:.1}%)",

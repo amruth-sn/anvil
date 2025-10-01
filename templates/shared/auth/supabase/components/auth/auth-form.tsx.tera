@@ -36,7 +36,7 @@ export function AuthForm({
       <Auth
         supabaseClient={supabase}
         view={view}
-        appearance={{
+        appearance={ {
           theme: ThemeSupa,
           variables: {
             default: {
@@ -95,24 +95,18 @@ export function AuthForm({
               },
             },
           },
-        }}
-        providers={[
-          {% if auth_config_enable_social_providers %}
-          'google',
-          'github',
-          'discord'
-          {% endif %}
-        ]}
+        } }
+        providers={['google', 'github', 'discord']}
         redirectTo={`${window.location.origin}/api/auth/callback`}
         showLinks={showLinks}
-        localization={{
+        localization={ {
           variables: {
             sign_in: {
               email_label: 'Email address',
               password_label: 'Password',
               button_label: 'Sign In',
               loading_button_label: 'Signing in...',
-              social_provider_text: 'Sign in with {{provider}}',
+              social_provider_text: 'Sign in with {% raw %}PROVIDER{% endraw %}',
               link_text: "Don't have an account? Sign up",
             },
             sign_up: {
@@ -120,7 +114,7 @@ export function AuthForm({
               password_label: 'Create a password',
               button_label: 'Sign Up',
               loading_button_label: 'Signing up...',
-              social_provider_text: 'Sign up with {{provider}}',
+              social_provider_text: 'Sign up with {% raw %}PROVIDER{% endraw %}',
               link_text: 'Already have an account? Sign in',
               confirmation_text: 'Check your email for the confirmation link',
             },
@@ -139,7 +133,7 @@ export function AuthForm({
               confirmation_text: 'Check your email for the reset link',
             },
           },
-        }}
+        } }
       />
     </div>
   )
