@@ -1,0 +1,20 @@
+/**
+ * Database Placeholder
+ * 
+ * This file is a placeholder for future database integration.
+ * Your project was generated without a database.
+ * 
+ * To add a database, consider:
+ * - Supabase (PostgreSQL with real-time features)
+ * - Neon (Serverless PostgreSQL)
+ * - MongoDB (NoSQL database)
+ * - PlanetScale (MySQL-compatible serverless database)
+ * - Prisma with any database provider
+ */
+
+export const DATABASE_ENABLED = false;
+
+export function getDatabase() {
+  return null;
+}
+
