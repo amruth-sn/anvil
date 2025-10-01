@@ -5,18 +5,23 @@ min_anvil_version: "0.1.0"
 
 variables:
   - name: "project_name"
-    type: "string"
+    type:
+      type: "string"
+      min_length: 1
+      max_length: 50
     prompt: "Project name?"
     required: true
-    min_length: 1
 
   - name: "author_name"
-    type: "string"
+    type:
+      type: "string"
     prompt: "Author name?"
     required: false
+    default: "Anonymous"
 
   - name: "description"
-    type: "string"
+    type:
+      type: "string"
     prompt: "Project description?"
     default: "A CLI application built with Go"
     required: false
@@ -40,3 +45,4 @@ hooks:
   post_generate:
     - command: "go mod tidy"
       working_dir: "."
+      condition: "always"

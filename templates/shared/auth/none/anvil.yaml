@@ -1,0 +1,20 @@
+name: "no-auth"
+description: "No authentication - for public applications or custom auth solutions"
+version: "1.0.0"
+category: "auth"
+
+dependencies:
+  npm: []
+
+environment_variables: []
+
+configuration_prompts: []
+
+files:
+  - path: "lib/auth-placeholder.ts"
+    description: "Placeholder for future authentication integration"
+
+setup_instructions: |
+  ℹ️  No Authentication:
+  This project doesn't include authentication.
+  You can add it later by integrating Clerk, Auth0, Supabase, or Firebase.

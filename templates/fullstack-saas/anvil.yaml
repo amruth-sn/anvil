@@ -20,7 +20,7 @@ variables:
     description: "The name of your SaaS application"
     required: true
 
-  - name: "project_description" 
+  - name: "project_description"
     type:
       type: "string"
       max_length: 200
@@ -96,35 +96,106 @@ variables:
 
   - name: "deployment_target"
     type:
-      type: "choice"  
+      type: "choice"
       options: ["vercel", "railway", "docker", "none"]
     prompt: "Choose deployment target:"
     description: "Where you plan to deploy your application"
     default: "vercel"
     required: false
 
+  - name: "auth_provider"
+    type:
+      type: "choice"
+      options: ["clerk", "auth0", "supabase", "firebase", "none"]
+    prompt: "Choose authentication provider:"
+    description: "Authentication service for user management"
+    default: "none"
+    required: false
+
+  - name: "api_pattern"
+    type:
+      type: "choice"
+      options: ["rest", "trpc", "graphql", "none"]
+    prompt: "Choose API pattern:"
+    description: "API architecture pattern for your backend"
+    default: "rest"
+    required: false
+
+  - name: "ai_provider"
+    type:
+      type: "choice"
+      options: ["openai", "claude", "none"]
+    prompt: "Choose AI provider:"
+    description: "AI service for intelligent features"
+    default: "none"
+    required: false
+
+  - name: "payment_provider"
+    type:
+      type: "choice"
+      options: ["stripe", "none"]
+    prompt: "Choose payment provider:"
+    description: "Payment processing service"
+    default: "none"
+    required: false
+
 features:
   - name: "typescript"
     description: "TypeScript support"
-  - name: "tailwind" 
+  - name: "tailwind"
     description: "Tailwind CSS for styling"
   - name: "app_router"
     description: "Next.js 14 App Router"
 
 services:
   - name: "auth"
-    category: "auth" 
+    category: "auth"
     prompt: "Choose authentication provider:"
-    options: ["clerk", "auth0", "none"]
+    options: ["clerk", "auth0", "supabase", "firebase", "none"]
     required: false
     default: "none"
-  
+
   - name: "api"
     category: "api"
     prompt: "Choose API pattern:"
     options: ["rest", "trpc", "graphql", "none"]
     required: false
     default: "rest"
+
+  - name: "database"
+    category: "database"
+    prompt: "Choose database provider:"
+    options: ["supabase", "neon", "mongodb", "none"]
+    required: false
+    default: "none"
+
+  - name: "ai"
+    category: "ai"
+    prompt: "Choose AI provider:"
+    options: ["openai", "claude", "none"]
+    required: false
+    default: "none"
+
+  - name: "payments"
+    category: "payments"
+    prompt: "Choose payment provider:"
+    options: ["stripe", "none"]
+    required: false
+    default: "none"
+
+  - name: "deployment"
+    category: "deployment"
+    prompt: "Choose deployment target:"
+    options: ["vercel", "railway", "docker", "none"]
+    required: false
+    default: "vercel"
+
+  - name: "monitoring"
+    category: "monitoring"
+    prompt: "Choose monitoring provider:"
+    options: ["sentry", "none"]
+    required: false
+    default: "none"
 
 service_combinations:
   - name: "Minimal Setup"
