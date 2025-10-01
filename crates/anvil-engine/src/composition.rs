@@ -3,13 +3,13 @@ Module for template composition engine that combines base templates with service
 Handles file merging, conflict resolution, and conditional inclusion logic.
 */
 
+use serde::Serialize;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use serde_json::Value;
-use serde::Serialize;
 use tokio::fs;
 
-use crate::config::{TemplateConfig, ServiceCategory, CompositionConfig, FileMergingStrategy};
+use crate::config::{CompositionConfig, FileMergingStrategy, ServiceCategory, TemplateConfig};
 use crate::error::{EngineError, EngineResult};
 
 #[derive(Debug, Clone)]
@@ -46,7 +46,10 @@ pub struct ComposedFile {
 #[derive(Debug, Clone)]
 pub enum FileSource {
     BaseTemplate,
-    Service { category: ServiceCategory, provider: String },
+    Service {
+        category: ServiceCategory,
+        provider: String,
+    },
     Merged,
 }
 
@@ -70,30 +73,37 @@ impl CompositionEngine {
             shared_services_path,
         }
     }
-    
+
     pub fn shared_services_path(&self) -> &PathBuf {
         &self.shared_services_path
     }
-    
+
     /*
     Discovers available service providers for a given category by scanning
     the shared services directory structure.
     */
-    pub async fn discover_service_providers(&self, category: ServiceCategory) -> EngineResult<Vec<String>> {
-        let category_dir = self.shared_services_path
+    pub async fn discover_service_providers(
+        &self,
+        category: ServiceCategory,
+    ) -> EngineResult<Vec<String>> {
+        let category_dir = self
+            .shared_services_path
             .join(format!("{:?}", category).to_lowercase());
-        
+
         if !category_dir.exists() {
             return Ok(vec!["none".to_string()]);
         }
-        
+
         let mut providers = vec!["none".to_string()];
-        let mut entries = fs::read_dir(&category_dir).await
+        let mut entries = fs::read_dir(&category_dir)
+            .await
             .map_err(|e| EngineError::file_error(&category_dir, e))?;
-        
-        while let Some(entry) = entries.next_entry().await
-            .map_err(|e| EngineError::file_error(&category_dir, e))? {
-            
+
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|e| EngineError::file_error(&category_dir, e))?
+        {
             let path = entry.path();
             if path.is_dir() {
                 if let Some(provider_name) = path.file_name().and_then(|n| n.to_str()) {
@@ -105,22 +115,24 @@ impl CompositionEngine {
                 }
             }
         }
-        
+
         providers.sort();
         Ok(providers)
     }
-    
+
     /*
     Discovers all available services and their providers by scanning the
     shared services directory structure.
     */
-    pub async fn discover_all_services(&self) -> EngineResult<HashMap<ServiceCategory, Vec<String>>> {
+    pub async fn discover_all_services(
+        &self,
+    ) -> EngineResult<HashMap<ServiceCategory, Vec<String>>> {
         let mut all_services = HashMap::new();
-        
+
         // Scan each service category
         for category in [
             ServiceCategory::Auth,
-            ServiceCategory::Payments, 
+            ServiceCategory::Payments,
             ServiceCategory::Database,
             ServiceCategory::AI,
             ServiceCategory::Api,
@@ -132,7 +144,7 @@ impl CompositionEngine {
             let providers = self.discover_service_providers(category.clone()).await?;
             all_services.insert(category, providers);
         }
-        
+
         Ok(all_services)
     }
 
@@ -145,12 +157,30 @@ impl CompositionEngine {
         template_name: &str,
         services: Vec<ServiceSelection>,
     ) -> EngineResult<ComposedTemplate> {
+        self.compose_template_with_context(template_name, services, None)
+            .await
+    }
+
+    /*
+    Composes a base template with selected services and optional context for validation.
+    Returns a ComposedTemplate containing all files and configurations.
+    */
+    pub async fn compose_template_with_context(
+        &self,
+        template_name: &str,
+        services: Vec<ServiceSelection>,
+        context: Option<&crate::Context>,
+    ) -> EngineResult<ComposedTemplate> {
         // Load base template configuration
-        let base_config_path = self.base_template_path.join(template_name).join("anvil.yaml");
+        let base_config_path = self
+            .base_template_path
+            .join(template_name)
+            .join("anvil.yaml");
         let base_config = TemplateConfig::from_file(&base_config_path).await?;
 
         // Validate service selections
-        self.validate_service_selections(&base_config, &services).await?;
+        self.validate_service_selections(&base_config, &services, context)
+            .await?;
 
         // Build service dependency injection context
         let service_context = self.build_service_context(&services).await?;
@@ -165,10 +195,14 @@ impl CompositionEngine {
         }
 
         // Apply conditional file inclusion
-        let filtered_files = self.apply_conditional_inclusion(composed_files, &services, &base_config.composition).await?;
+        let filtered_files = self
+            .apply_conditional_inclusion(composed_files, &services, &base_config.composition)
+            .await?;
 
         // Handle file conflicts and merging
-        let resolved_files = self.resolve_file_conflicts(filtered_files, &base_config.composition).await?;
+        let resolved_files = self
+            .resolve_file_conflicts(filtered_files, &base_config.composition)
+            .await?;
 
         // Merge dependencies (package.json, Cargo.toml, etc.)
         let merged_dependencies = self.merge_dependencies(&services).await?;
@@ -193,6 +227,7 @@ impl CompositionEngine {
         &self,
         base_config: &TemplateConfig,
         services: &[ServiceSelection],
+        context: Option<&crate::Context>,
     ) -> EngineResult<()> {
         // Check that required services are provided
         for service_def in &base_config.services {
@@ -200,7 +235,8 @@ impl CompositionEngine {
                 let has_service = services.iter().any(|s| s.category == service_def.category);
                 if !has_service {
                     return Err(EngineError::composition_error(format!(
-                        "Required service '{}' not provided", service_def.name
+                        "Required service '{}' not provided",
+                        service_def.name
                     )));
                 }
             }
@@ -209,12 +245,16 @@ impl CompositionEngine {
         // Validate each service selection
         for service in services {
             // Check if service category is supported by the template
-            let service_def = base_config.services.iter()
+            let service_def = base_config
+                .services
+                .iter()
                 .find(|s| s.category == service.category)
-                .ok_or_else(|| EngineError::composition_error(format!(
-                    "Service category '{:?}' not supported by template '{}'", 
-                    service.category, base_config.name
-                )))?;
+                .ok_or_else(|| {
+                    EngineError::composition_error(format!(
+                        "Service category '{:?}' not supported by template '{}'",
+                        service.category, base_config.name
+                    ))
+                })?;
 
             // Check if provider option is valid
             if !service_def.options.contains(&service.provider) {
@@ -225,13 +265,14 @@ impl CompositionEngine {
             }
 
             // Check if service files exist
-            let service_path = self.shared_services_path
+            let service_path = self
+                .shared_services_path
                 .join(format!("{:?}", service.category).to_lowercase())
                 .join(&service.provider);
-            
+
             if !service_path.exists() {
                 return Err(EngineError::composition_error(format!(
-                    "Service files not found for '{:?}/{}'", 
+                    "Service files not found for '{:?}/{}'",
                     service.category, service.provider
                 )));
             }
@@ -239,12 +280,19 @@ impl CompositionEngine {
 
         // Check for conflicting services
         for service in services {
-            if let Some(service_def) = base_config.services.iter().find(|s| s.category == service.category) {
+            if let Some(service_def) = base_config
+                .services
+                .iter()
+                .find(|s| s.category == service.category)
+            {
                 if let Some(conflicts) = &service_def.conflicts {
                     for conflict in conflicts {
-                        if services.iter().any(|s| format!("{:?}", s.category).to_lowercase() == *conflict) {
+                        if services
+                            .iter()
+                            .any(|s| format!("{:?}", s.category).to_lowercase() == *conflict)
+                        {
                             return Err(EngineError::composition_error(format!(
-                                "Service conflict: {} conflicts with {}", 
+                                "Service conflict: {} conflicts with {}",
                                 service_def.name, conflict
                             )));
                         }
@@ -255,13 +303,17 @@ impl CompositionEngine {
 
         // Check for missing dependencies
         for service in services {
-            if let Some(service_def) = base_config.services.iter().find(|s| s.category == service.category) {
+            if let Some(service_def) = base_config
+                .services
+                .iter()
+                .find(|s| s.category == service.category)
+            {
                 if let Some(dependencies) = &service_def.dependencies {
                     for dependency in dependencies {
-                        let has_dependency = services.iter().any(|s| 
-                            format!("{:?}", s.category).to_lowercase() == *dependency
-                        );
-                        
+                        let has_dependency = services
+                            .iter()
+                            .any(|s| format!("{:?}", s.category).to_lowercase() == *dependency);
+
                         if !has_dependency {
                             return Err(EngineError::composition_error(format!(
                                 "Service '{}' requires dependency '{}' which is not selected",
@@ -274,7 +326,8 @@ impl CompositionEngine {
         }
 
         // Enhanced compatibility validation
-        self.validate_service_compatibility(base_config, services).await?;
+        self.validate_service_compatibility(base_config, services, context)
+            .await?;
 
         Ok(())
     }
@@ -287,22 +340,28 @@ impl CompositionEngine {
         &self,
         base_config: &TemplateConfig,
         services: &[ServiceSelection],
+        context: Option<&crate::Context>,
     ) -> EngineResult<()> {
-        // Detect project language from base template
-        let project_language = self.detect_project_language(base_config).await?;
-        
+        // Detect project language from base template and context
+        let project_language = self.detect_project_language(base_config, context).await?;
+
         // Load service configurations for enhanced validation
         for service in services {
-            let service_config_path = self.shared_services_path
+            let service_config_path = self
+                .shared_services_path
                 .join(format!("{:?}", service.category).to_lowercase())
                 .join(&service.provider)
                 .join("anvil.yaml");
 
             if service_config_path.exists() {
-                let service_config = crate::config::ServiceConfig::from_file(&service_config_path).await?;
-                
+                let service_config =
+                    crate::config::ServiceConfig::from_file(&service_config_path).await?;
+
                 // Check language requirements
-                if let Some(language_reqs) = self.get_service_language_requirements(&service_config).await? {
+                if let Some(language_reqs) = self
+                    .get_service_language_requirements(&service_config)
+                    .await?
+                {
                     for required_lang in &language_reqs {
                         if !project_language.contains(required_lang) {
                             return Err(EngineError::composition_error(format!(
@@ -315,9 +374,10 @@ impl CompositionEngine {
                         }
                     }
                 }
-                
+
                 // Check compatibility rules from service configuration
-                self.validate_service_rules(&service_config, services, &project_language).await?;
+                self.validate_service_rules(&service_config, services, &project_language)
+                    .await?;
             }
         }
 
@@ -330,9 +390,23 @@ impl CompositionEngine {
     /*
     Detects the primary language(s) of the project from the base template.
     */
-    async fn detect_project_language(&self, base_config: &TemplateConfig) -> EngineResult<Vec<String>> {
+    async fn detect_project_language(
+        &self,
+        base_config: &TemplateConfig,
+        context: Option<&crate::Context>,
+    ) -> EngineResult<Vec<String>> {
         let mut languages = Vec::new();
-        
+
+        // First, check if language is explicitly set in context
+        if let Some(ctx) = context {
+            if let Some(lang_value) = ctx.get_variable("language") {
+                if let Some(lang_str) = lang_value.as_str() {
+                    languages.push(lang_str.to_string());
+                    return Ok(languages);
+                }
+            }
+        }
+
         // Check template name for language hints
         if base_config.name.contains("rust") {
             languages.push("rust".to_string());
@@ -345,13 +419,13 @@ impl CompositionEngine {
             languages.push("typescript".to_string());
             languages.push("javascript".to_string());
         }
-        
+
         // TODO: Could be enhanced to check actual files in template
         // for more accurate language detection
-        
+
         Ok(languages)
     }
-    
+
     /*
     Extracts language requirements from service configuration.
     */
@@ -359,17 +433,9 @@ impl CompositionEngine {
         &self,
         service_config: &crate::config::ServiceConfig,
     ) -> EngineResult<Option<Vec<String>>> {
-        // For now, we'll check if the service config has language_requirements field
-        // This would need to be added to ServiceConfig struct
-        // TODO: Add language_requirements field to ServiceConfig
-        
-        // Hardcoded rules for known services that require specific languages
-        match service_config.name.as_str() {
-            "trpc-api" => Ok(Some(vec!["typescript".to_string()])),
-            _ => Ok(None),
-        }
+        Ok(service_config.language_requirements.clone())
     }
-    
+
     /*
     Validates service-specific compatibility rules.
     */
@@ -382,21 +448,21 @@ impl CompositionEngine {
         // TODO: Implement compatibility rules validation
         // This would check the compatibility_rules field in service config
         // For now, implement specific known rules
-        
+
         match service_config.name.as_str() {
             "trpc-api" => {
                 if !project_languages.contains(&"typescript".to_string()) {
                     return Err(EngineError::composition_error(
-                        "tRPC requires TypeScript for type safety".to_string()
+                        "tRPC requires TypeScript for type safety".to_string(),
                     ));
                 }
             }
             _ => {}
         }
-        
+
         Ok(())
     }
-    
+
     /*
     Validates compatibility between different selected services.
     */
@@ -409,43 +475,38 @@ impl CompositionEngine {
             .iter()
             .map(|s| format!("{:?}/{}", s.category, s.provider))
             .collect();
-        
+
         // Example: Check if multiple auth providers are selected
         let auth_services: Vec<_> = services
             .iter()
             .filter(|s| s.category == ServiceCategory::Auth)
             .collect();
-        
+
         if auth_services.len() > 1 {
-            let auth_providers: Vec<_> = auth_services
-                .iter()
-                .map(|s| s.provider.as_str())
-                .collect();
+            let auth_providers: Vec<_> =
+                auth_services.iter().map(|s| s.provider.as_str()).collect();
             return Err(EngineError::composition_error(format!(
                 "Multiple auth providers selected: {:?}. Only one auth provider is allowed.",
                 auth_providers
             )));
         }
-        
+
         // Example: Check if multiple API patterns are selected
         let api_services: Vec<_> = services
             .iter()
             .filter(|s| s.category == ServiceCategory::Api)
             .collect();
-        
+
         if api_services.len() > 1 {
-            let api_providers: Vec<_> = api_services
-                .iter()
-                .map(|s| s.provider.as_str())
-                .collect();
+            let api_providers: Vec<_> = api_services.iter().map(|s| s.provider.as_str()).collect();
             return Err(EngineError::composition_error(format!(
                 "Multiple API patterns selected: {:?}. Only one API pattern is recommended.",
                 api_providers
             )));
         }
-        
+
         // TODO: Add more cross-service compatibility checks
-        
+
         Ok(())
     }
 
@@ -453,7 +514,10 @@ impl CompositionEngine {
     Builds service dependency injection context by loading service configurations
     and creating a shared context for cross-service communication.
     */
-    async fn build_service_context(&self, services: &[ServiceSelection]) -> EngineResult<ServiceContext> {
+    async fn build_service_context(
+        &self,
+        services: &[ServiceSelection],
+    ) -> EngineResult<ServiceContext> {
         let mut service_context = ServiceContext {
             services: HashMap::new(),
             shared_config: HashMap::new(),
@@ -461,66 +525,111 @@ impl CompositionEngine {
 
         // Load each service configuration and build context
         for service in services {
-            let service_config_path = self.shared_services_path
+            // Skip "none" provider
+            if service.provider == "none" {
+                continue;
+            }
+
+            let service_config_path = self
+                .shared_services_path
                 .join(format!("{:?}", service.category).to_lowercase())
                 .join(&service.provider)
                 .join("anvil.yaml");
 
             if service_config_path.exists() {
-                let service_config = crate::config::ServiceConfig::from_file(&service_config_path).await?;
-                
+                let service_config =
+                    crate::config::ServiceConfig::from_file(&service_config_path).await?;
+
                 // Build service exports for dependency injection
                 let mut exports = HashMap::new();
-                
+
                 // Export common service information
-                exports.insert("provider".to_string(), Value::String(service.provider.clone()));
-                exports.insert("category".to_string(), Value::String(format!("{:?}", service.category)));
-                
+                exports.insert(
+                    "provider".to_string(),
+                    Value::String(service.provider.clone()),
+                );
+                exports.insert(
+                    "category".to_string(),
+                    Value::String(format!("{:?}", service.category)),
+                );
+
                 // Export service-specific values based on category
                 match service.category {
                     ServiceCategory::Auth => {
-                        exports.insert("auth_provider".to_string(), Value::String(service.provider.clone()));
+                        exports.insert(
+                            "auth_provider".to_string(),
+                            Value::String(service.provider.clone()),
+                        );
                         exports.insert("has_auth".to_string(), Value::Bool(true));
                         // Export auth-specific environment variables
                         for env_var in &service_config.environment_variables {
-                            if env_var.name.contains("PUBLISHABLE") || env_var.name.contains("PUBLIC") {
+                            if env_var.name.contains("PUBLISHABLE")
+                                || env_var.name.contains("PUBLIC")
+                            {
                                 exports.insert(
-                                    "public_auth_key_name".to_string(), 
-                                    Value::String(env_var.name.clone())
+                                    "public_auth_key_name".to_string(),
+                                    Value::String(env_var.name.clone()),
                                 );
                             }
                         }
                     }
                     ServiceCategory::Database => {
-                        exports.insert("database_provider".to_string(), Value::String(service.provider.clone()));
+                        exports.insert(
+                            "database_provider".to_string(),
+                            Value::String(service.provider.clone()),
+                        );
                         exports.insert("has_database".to_string(), Value::Bool(true));
                     }
                     ServiceCategory::Payments => {
-                        exports.insert("payments_provider".to_string(), Value::String(service.provider.clone()));
+                        exports.insert(
+                            "payments_provider".to_string(),
+                            Value::String(service.provider.clone()),
+                        );
                         exports.insert("has_payments".to_string(), Value::Bool(true));
                     }
                     ServiceCategory::AI => {
-                        exports.insert("ai_provider".to_string(), Value::String(service.provider.clone()));
+                        exports.insert(
+                            "ai_provider".to_string(),
+                            Value::String(service.provider.clone()),
+                        );
                         exports.insert("has_ai".to_string(), Value::Bool(true));
                     }
                     ServiceCategory::Api => {
-                        exports.insert("api_pattern".to_string(), Value::String(service.provider.clone()));
+                        exports.insert(
+                            "api_pattern".to_string(),
+                            Value::String(service.provider.clone()),
+                        );
                         exports.insert("has_api".to_string(), Value::Bool(true));
-                        exports.insert("api_type".to_string(), Value::String(service.provider.clone()));
+                        exports.insert(
+                            "api_type".to_string(),
+                            Value::String(service.provider.clone()),
+                        );
                     }
                     _ => {
                         // Generic exports for other service types
                         exports.insert(
                             format!("has_{}", format!("{:?}", service.category).to_lowercase()),
-                            Value::Bool(true)
+                            Value::Bool(true),
                         );
+                    }
+                }
+
+                // Add default values from configuration_prompts if not provided
+                let mut enriched_config = service.config.clone();
+                for prompt in &service_config.configuration_prompts {
+                    if !enriched_config.contains_key(&prompt.name) {
+                        if let Some(default_val) = &prompt.default {
+                            enriched_config.insert(prompt.name.clone(), default_val.clone());
+                        }
                     }
                 }
 
                 // Merge service-provided exports with user configuration
                 let mut all_exports = exports;
-                for (key, value) in &service.config {
-                    all_exports.insert(format!("config_{}", key), value.clone());
+                for (key, value) in &enriched_config {
+                    // Add with service category prefix for template access
+                    let category_name = format!("{:?}", service.category).to_lowercase();
+                    all_exports.insert(format!("{}_config_{}", category_name, key), value.clone());
                 }
 
                 let service_info = ServiceInfo {
@@ -529,14 +638,16 @@ impl CompositionEngine {
                     exports: all_exports,
                 };
 
-                service_context.services.insert(format!("{:?}", service.category), service_info);
+                service_context
+                    .services
+                    .insert(format!("{:?}", service.category), service_info);
             }
         }
 
         // Build shared configuration across all services
         let mut has_any_auth = false;
         let mut has_any_database = false;
-        
+
         for (category_str, _service_info) in &service_context.services {
             match category_str.as_str() {
                 "Auth" => has_any_auth = true,
@@ -545,11 +656,17 @@ impl CompositionEngine {
             }
         }
 
-        service_context.shared_config.insert("has_any_auth".to_string(), Value::Bool(has_any_auth));
-        service_context.shared_config.insert("has_any_database".to_string(), Value::Bool(has_any_database));
-        service_context.shared_config.insert("service_count".to_string(), Value::Number(
-            serde_json::Number::from(services.len())
-        ));
+        service_context
+            .shared_config
+            .insert("has_any_auth".to_string(), Value::Bool(has_any_auth));
+        service_context.shared_config.insert(
+            "has_any_database".to_string(),
+            Value::Bool(has_any_database),
+        );
+        service_context.shared_config.insert(
+            "service_count".to_string(),
+            Value::Number(serde_json::Number::from(services.len())),
+        );
 
         Ok(service_context)
     }
@@ -557,11 +674,20 @@ impl CompositionEngine {
     /*
     Collects all files from the base template directory.
     */
-    async fn collect_base_template_files(&self, template_name: &str) -> EngineResult<Vec<ComposedFile>> {
+    async fn collect_base_template_files(
+        &self,
+        template_name: &str,
+    ) -> EngineResult<Vec<ComposedFile>> {
         let template_path = self.base_template_path.join(template_name);
         let mut files = Vec::new();
 
-        self.collect_files_recursive(&template_path, &template_path, FileSource::BaseTemplate, &mut files).await?;
+        self.collect_files_recursive(
+            &template_path,
+            &template_path,
+            FileSource::BaseTemplate,
+            &mut files,
+        )
+        .await?;
 
         Ok(files)
     }
@@ -569,14 +695,24 @@ impl CompositionEngine {
     /*
     Collects files for a specific service selection.
     */
-    async fn collect_service_files(&self, service: &ServiceSelection) -> EngineResult<Vec<ComposedFile>> {
-        let service_path = self.shared_services_path
+    async fn collect_service_files(
+        &self,
+        service: &ServiceSelection,
+    ) -> EngineResult<Vec<ComposedFile>> {
+        // Skip collecting files for "none" provider
+        if service.provider == "none" {
+            return Ok(Vec::new());
+        }
+
+        let service_path = self
+            .shared_services_path
             .join(format!("{:?}", service.category).to_lowercase())
             .join(&service.provider);
 
         if !service_path.exists() {
             return Err(EngineError::composition_error(format!(
-                "Service files not found: {:?}/{}", service.category, service.provider
+                "Service files not found: {:?}/{}",
+                service.category, service.provider
             )));
         }
 
@@ -586,7 +722,8 @@ impl CompositionEngine {
             provider: service.provider.clone(),
         };
 
-        self.collect_files_recursive(&service_path, &service_path, source, &mut files).await?;
+        self.collect_files_recursive(&service_path, &service_path, source, &mut files)
+            .await?;
 
         Ok(files)
     }
@@ -602,57 +739,65 @@ impl CompositionEngine {
         files: &'a mut Vec<ComposedFile>,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = EngineResult<()>> + Send + 'a>> {
         Box::pin(async move {
-        let mut entries = fs::read_dir(dir).await.map_err(|e| {
-            EngineError::file_error(dir, e)
-        })?;
+            let mut entries = fs::read_dir(dir)
+                .await
+                .map_err(|e| EngineError::file_error(dir, e))?;
 
-        while let Some(entry) = entries.next_entry().await.map_err(|e| {
-            EngineError::file_error(dir, e)
-        })? {
-            let path = entry.path();
-            
-            if path.is_dir() {
-                self.collect_files_recursive(&path, base_path, source.clone(), files).await?;
-            } else if path.is_file() {
-                // Skip anvil.yaml config files in service directories
-                if path.file_name().and_then(|name| name.to_str()) == Some("anvil.yaml") {
-                    continue;
+            while let Some(entry) = entries
+                .next_entry()
+                .await
+                .map_err(|e| EngineError::file_error(dir, e))?
+            {
+                let path = entry.path();
+
+                if path.is_dir() {
+                    self.collect_files_recursive(&path, base_path, source.clone(), files)
+                        .await?;
+                } else if path.is_file() {
+                    // Skip anvil.yaml config files in service directories
+                    if path.file_name().and_then(|name| name.to_str()) == Some("anvil.yaml") {
+                        continue;
+                    }
+
+                    let relative_path = path.strip_prefix(base_path).map_err(|_| {
+                        EngineError::composition_error(format!(
+                            "Invalid path structure: {}",
+                            path.display()
+                        ))
+                    })?;
+
+                    let content = fs::read_to_string(&path)
+                        .await
+                        .map_err(|e| EngineError::file_error(&path, e))?;
+
+                    // Check if this is a Tera template file
+                    let is_template =
+                        relative_path.extension().and_then(|e| e.to_str()) == Some("tera");
+
+                    // Process output path - remove .tera extension if present
+                    let output_path = if is_template {
+                        // Remove .tera extension: package.json.tera -> package.json
+                        let file_name = relative_path
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("")
+                            .trim_end_matches(".tera");
+                        relative_path.with_file_name(file_name)
+                    } else {
+                        relative_path.to_path_buf()
+                    };
+
+                    files.push(ComposedFile {
+                        path: output_path,
+                        content,
+                        source: source.clone(),
+                        merge_strategy: FileMergingStrategy::default(),
+                        is_template,
+                    });
                 }
-
-                let relative_path = path.strip_prefix(base_path).map_err(|_| {
-                    EngineError::composition_error(format!("Invalid path structure: {}", path.display()))
-                })?;
-
-                let content = fs::read_to_string(&path).await.map_err(|e| {
-                    EngineError::file_error(&path, e)
-                })?;
-
-                // Check if this is a Tera template file
-                let is_template = relative_path.extension().and_then(|e| e.to_str()) == Some("tera");
-                
-                // Process output path - remove .tera extension if present
-                let output_path = if is_template {
-                    // Remove .tera extension: package.json.tera -> package.json
-                    let file_name = relative_path.file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or("")
-                        .trim_end_matches(".tera");
-                    relative_path.with_file_name(file_name)
-                } else {
-                    relative_path.to_path_buf()
-                };
-
-                files.push(ComposedFile {
-                    path: output_path,
-                    content,
-                    source: source.clone(),
-                    merge_strategy: FileMergingStrategy::default(),
-                    is_template,
-                });
             }
-        }
 
-        Ok(())
+            Ok(())
         })
     }
 
@@ -669,7 +814,10 @@ impl CompositionEngine {
 
         // Group files by path
         for file in files {
-            file_map.entry(file.path.clone()).or_insert_with(Vec::new).push(file);
+            file_map
+                .entry(file.path.clone())
+                .or_insert_with(Vec::new)
+                .push(file);
         }
 
         let mut resolved_files = Vec::new();
@@ -686,7 +834,9 @@ impl CompositionEngine {
                     .map(|c| &c.file_merging_strategy)
                     .unwrap_or(&default_strategy);
 
-                let resolved = self.resolve_single_conflict(path, conflicting_files, strategy).await?;
+                let resolved = self
+                    .resolve_single_conflict(path, conflicting_files, strategy)
+                    .await?;
                 resolved_files.push(resolved);
             }
         }
@@ -706,12 +856,14 @@ impl CompositionEngine {
         match strategy {
             FileMergingStrategy::Override => {
                 // Service files override base template files
-                files.sort_by(|a, b| {
-                    match (&a.source, &b.source) {
-                        (FileSource::BaseTemplate, FileSource::Service { .. }) => std::cmp::Ordering::Less,
-                        (FileSource::Service { .. }, FileSource::BaseTemplate) => std::cmp::Ordering::Greater,
-                        _ => std::cmp::Ordering::Equal,
+                files.sort_by(|a, b| match (&a.source, &b.source) {
+                    (FileSource::BaseTemplate, FileSource::Service { .. }) => {
+                        std::cmp::Ordering::Less
                     }
+                    (FileSource::Service { .. }, FileSource::BaseTemplate) => {
+                        std::cmp::Ordering::Greater
+                    }
+                    _ => std::cmp::Ordering::Equal,
                 });
                 Ok(files.into_iter().last().unwrap())
             }
@@ -769,16 +921,19 @@ impl CompositionEngine {
         let mut merged_json = serde_json::Map::new();
 
         for file in &files {
-            let json: serde_json::Value = serde_json::from_str(&file.content)
-                .map_err(|e| EngineError::composition_error(format!("Invalid JSON in {}: {}", path.display(), e)))?;
+            let json: serde_json::Value = serde_json::from_str(&file.content).map_err(|e| {
+                EngineError::composition_error(format!("Invalid JSON in {}: {}", path.display(), e))
+            })?;
 
             if let serde_json::Value::Object(obj) = json {
                 for (key, value) in obj {
                     match merged_json.get(&key) {
                         Some(existing) => {
                             // Merge dependencies and devDependencies
-                            if (key == "dependencies" || key == "devDependencies") &&
-                               existing.is_object() && value.is_object() {
+                            if (key == "dependencies" || key == "devDependencies")
+                                && existing.is_object()
+                                && value.is_object()
+                            {
                                 let mut merged_deps = existing.as_object().unwrap().clone();
                                 merged_deps.extend(value.as_object().unwrap().clone());
                                 merged_json.insert(key, serde_json::Value::Object(merged_deps));
@@ -795,8 +950,9 @@ impl CompositionEngine {
             }
         }
 
-        let merged_content = serde_json::to_string_pretty(&merged_json)
-            .map_err(|e| EngineError::composition_error(format!("Failed to serialize merged JSON: {}", e)))?;
+        let merged_content = serde_json::to_string_pretty(&merged_json).map_err(|e| {
+            EngineError::composition_error(format!("Failed to serialize merged JSON: {}", e))
+        })?;
 
         Ok(ComposedFile {
             path,
@@ -811,41 +967,48 @@ impl CompositionEngine {
     Merges dependencies from all selected services.
     Returns a map of dependency files to their merged content.
     */
-    async fn merge_dependencies(&self, services: &[ServiceSelection]) -> EngineResult<HashMap<String, Value>> {
+    async fn merge_dependencies(
+        &self,
+        services: &[ServiceSelection],
+    ) -> EngineResult<HashMap<String, Value>> {
         let mut merged_deps = HashMap::new();
         let mut npm_dependencies = Vec::new();
         let mut cargo_dependencies = HashMap::new();
         let mut environment_variables = Vec::new();
-        
+
         // Collect dependencies from each service
         for service in services {
-            let service_config_path = self.shared_services_path
+            let service_config_path = self
+                .shared_services_path
                 .join(format!("{:?}", service.category).to_lowercase())
                 .join(&service.provider)
                 .join("anvil.yaml");
-            
+
             if service_config_path.exists() {
-                let service_config = crate::config::ServiceConfig::from_file(&service_config_path).await?;
-                
+                let service_config =
+                    crate::config::ServiceConfig::from_file(&service_config_path).await?;
+
                 // Collect NPM dependencies
                 if let Some(deps) = &service_config.dependencies {
                     if let Some(npm_deps) = &deps.npm {
                         npm_dependencies.extend(npm_deps.iter().cloned());
                     }
-                    
+
                     if let Some(cargo_deps) = &deps.cargo {
-                        cargo_dependencies.extend(cargo_deps.iter().map(|(k, v)| (k.clone(), v.clone())));
+                        cargo_dependencies
+                            .extend(cargo_deps.iter().map(|(k, v)| (k.clone(), v.clone())));
                     }
                 }
-                
+
                 // Collect environment variables
                 environment_variables.extend(service_config.environment_variables);
             }
         }
-        
+
         // Create merged dependencies structure using serde_json::Value (for Tera compatibility)
         if !npm_dependencies.is_empty() {
-            let npm_deps: Vec<Value> = npm_dependencies.into_iter()
+            let npm_deps: Vec<Value> = npm_dependencies
+                .into_iter()
                 .map(|dep| {
                     // Parse dependency with optional version (e.g., "@clerk/nextjs@^5.0.0")
                     if let Some(_at_pos) = dep.rfind('@') {
@@ -855,8 +1018,14 @@ impl CompositionEngine {
                             let parts: Vec<&str> = dep.rsplitn(2, '@').collect();
                             if parts.len() == 2 {
                                 let mut dep_obj = serde_json::Map::new();
-                                dep_obj.insert("name".to_string(), Value::String(parts[1].to_string()));
-                                dep_obj.insert("version".to_string(), Value::String(parts[0].to_string()));
+                                dep_obj.insert(
+                                    "name".to_string(),
+                                    Value::String(parts[1].to_string()),
+                                );
+                                dep_obj.insert(
+                                    "version".to_string(),
+                                    Value::String(parts[0].to_string()),
+                                );
                                 return Value::Object(dep_obj);
                             }
                         } else if !dep.starts_with('@') {
@@ -864,13 +1033,19 @@ impl CompositionEngine {
                             let parts: Vec<&str> = dep.splitn(2, '@').collect();
                             if parts.len() == 2 {
                                 let mut dep_obj = serde_json::Map::new();
-                                dep_obj.insert("name".to_string(), Value::String(parts[0].to_string()));
-                                dep_obj.insert("version".to_string(), Value::String(parts[1].to_string()));
+                                dep_obj.insert(
+                                    "name".to_string(),
+                                    Value::String(parts[0].to_string()),
+                                );
+                                dep_obj.insert(
+                                    "version".to_string(),
+                                    Value::String(parts[1].to_string()),
+                                );
                                 return Value::Object(dep_obj);
                             }
                         }
                     }
-                    
+
                     // Default: package without version specified
                     let mut dep_obj = serde_json::Map::new();
                     dep_obj.insert("name".to_string(), Value::String(dep));
@@ -878,23 +1053,28 @@ impl CompositionEngine {
                     Value::Object(dep_obj)
                 })
                 .collect();
-            
+
             merged_deps.insert("npm".to_string(), Value::Array(npm_deps));
         }
-        
+
         if !cargo_dependencies.is_empty() {
-            let cargo_map: serde_json::Map<String, Value> = cargo_dependencies.into_iter()
+            let cargo_map: serde_json::Map<String, Value> = cargo_dependencies
+                .into_iter()
                 .map(|(k, v)| (k, Value::String(v)))
                 .collect();
             merged_deps.insert("cargo".to_string(), Value::Object(cargo_map));
         }
-        
+
         if !environment_variables.is_empty() {
-            let env_array: Vec<Value> = environment_variables.into_iter()
+            let env_array: Vec<Value> = environment_variables
+                .into_iter()
                 .map(|env_var| {
                     let mut env_map = serde_json::Map::new();
                     env_map.insert("name".to_string(), Value::String(env_var.name));
-                    env_map.insert("description".to_string(), Value::String(env_var.description));
+                    env_map.insert(
+                        "description".to_string(),
+                        Value::String(env_var.description),
+                    );
                     env_map.insert("required".to_string(), Value::Bool(env_var.required));
                     if let Some(default) = env_var.default {
                         env_map.insert("default".to_string(), Value::String(default));
@@ -902,10 +1082,10 @@ impl CompositionEngine {
                     Value::Object(env_map)
                 })
                 .collect();
-            
+
             merged_deps.insert("environment_variables".to_string(), Value::Array(env_array));
         }
-        
+
         Ok(merged_deps)
     }
 
@@ -923,17 +1103,22 @@ impl CompositionEngine {
 
         // Create context for condition evaluation
         let mut context = HashMap::new();
-        
+
         // Add service selections to context
         for service in services {
             let category_key = format!("{:?}", service.category).to_lowercase();
             context.insert(category_key, service.provider.clone());
-            context.insert(format!("has_{}", format!("{:?}", service.category).to_lowercase()), "true".to_string());
+            context.insert(
+                format!("has_{}", format!("{:?}", service.category).to_lowercase()),
+                "true".to_string(),
+            );
         }
 
         for file in files {
-            let should_include = self.evaluate_file_conditions(&file, &context, composition_config).await?;
-            
+            let should_include = self
+                .evaluate_file_conditions(&file, &context, composition_config)
+                .await?;
+
             if should_include {
                 filtered_files.push(file);
             }
@@ -955,7 +1140,9 @@ impl CompositionEngine {
         if let Some(config) = composition_config {
             for conditional_file in &config.conditional_files {
                 if file.path == PathBuf::from(&conditional_file.path) {
-                    return self.evaluate_condition(&conditional_file.condition, context).await;
+                    return self
+                        .evaluate_condition(&conditional_file.condition, context)
+                        .await;
                 }
             }
         }
@@ -968,7 +1155,7 @@ impl CompositionEngine {
     Evaluates a condition string against the current context.
     Supports basic conditions like:
     - "services.auth == 'clerk'"
-    - "services.payments in ['stripe']" 
+    - "services.payments in ['stripe']"
     - "has_auth && has_payments"
     */
     async fn evaluate_condition(
@@ -1023,7 +1210,7 @@ impl CompositionEngine {
             if parts.len() == 2 {
                 let left = parts[0].trim();
                 let right = parts[1].trim().trim_matches('\'').trim_matches('"');
-                
+
                 if left.starts_with("services.") {
                     let service_type = left.strip_prefix("services.").unwrap();
                     return Ok(context.get(service_type).map_or(false, |v| v == right));
@@ -1037,15 +1224,17 @@ impl CompositionEngine {
             if parts.len() == 2 {
                 let left = parts[0].trim();
                 let right = parts[1].trim();
-                
+
                 if left.starts_with("services.") && right.starts_with('[') && right.ends_with(']') {
                     let service_type = left.strip_prefix("services.").unwrap();
-                    let options: Vec<&str> = right[1..right.len()-1]
+                    let options: Vec<&str> = right[1..right.len() - 1]
                         .split(',')
                         .map(|s| s.trim().trim_matches('\'').trim_matches('"'))
                         .collect();
-                    
-                    return Ok(context.get(service_type).map_or(false, |v| options.contains(&v.as_str())));
+
+                    return Ok(context
+                        .get(service_type)
+                        .map_or(false, |v| options.contains(&v.as_str())));
                 }
             }
         }
@@ -1076,7 +1265,9 @@ impl CompositionEngine {
             FileSource::Service { category, provider } => {
                 // Service files are included if the service is selected
                 let category_key = format!("{:?}", category).to_lowercase();
-                Ok(context.get(&category_key).map_or(false, |selected| selected == provider))
+                Ok(context
+                    .get(&category_key)
+                    .map_or(false, |selected| selected == provider))
             }
             FileSource::Merged => {
                 // Merged files are always included
@@ -1088,7 +1279,10 @@ impl CompositionEngine {
     /*
     Collects environment variables required by all selected services.
     */
-    async fn collect_environment_variables(&self, _services: &[ServiceSelection]) -> EngineResult<HashMap<String, String>> {
+    async fn collect_environment_variables(
+        &self,
+        _services: &[ServiceSelection],
+    ) -> EngineResult<HashMap<String, String>> {
         // TODO: Implement environment variable collection from service configs
         Ok(HashMap::new())
     }
@@ -1105,7 +1299,9 @@ mod tests {
         let base_path = temp_dir.path();
 
         // Create base template
-        fs::create_dir_all(base_path.join("templates/test-app")).await.unwrap();
+        fs::create_dir_all(base_path.join("templates/test-app"))
+            .await
+            .unwrap();
         fs::write(
             base_path.join("templates/test-app/anvil.yaml"),
             r#"
@@ -1119,14 +1315,20 @@ services:
     options: ["clerk", "auth0"]
     required: true
 "#,
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
 
         // Create shared services
-        fs::create_dir_all(base_path.join("templates/shared/auth/clerk")).await.unwrap();
+        fs::create_dir_all(base_path.join("templates/shared/auth/clerk"))
+            .await
+            .unwrap();
         fs::write(
             base_path.join("templates/shared/auth/clerk/middleware.ts"),
             "// Clerk middleware",
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
 
         temp_dir
     }

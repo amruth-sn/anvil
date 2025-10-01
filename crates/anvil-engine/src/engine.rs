@@ -325,8 +325,30 @@ impl TemplateEngine {
 
     fn pascal_case_filter(value: &tera::Value, _: &HashMap<String, tera::Value>) -> tera::Result<tera::Value> {
         let s = value.as_str().ok_or_else(|| tera::Error::msg("Value must be a string"))?;
-        let pascal_case = s
-            .split(&[' ', '_', '-'][..])
+        
+        // First, split by common delimiters and handle camelCase/PascalCase
+        let mut words = Vec::new();
+        for segment in s.split(&[' ', '_', '-'][..]) {
+            if segment.is_empty() {
+                continue;
+            }
+            
+            // Split camelCase/PascalCase by detecting uppercase letters
+            let mut current_word = String::new();
+            for ch in segment.chars() {
+                if ch.is_uppercase() && !current_word.is_empty() {
+                    words.push(current_word.clone());
+                    current_word.clear();
+                }
+                current_word.push(ch);
+            }
+            if !current_word.is_empty() {
+                words.push(current_word);
+            }
+        }
+        
+        let pascal_case = words
+            .iter()
             .map(|word| {
                 let mut chars = word.chars();
                 match chars.next() {

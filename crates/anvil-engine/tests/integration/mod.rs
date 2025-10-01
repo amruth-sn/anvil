@@ -144,11 +144,41 @@ impl IntegrationTestSuite {
         // Debug: print the command being executed (remove when stable)
         // println!("🔍 Running command: {:?} in workspace {:?}", cmd, self.workspace_dir);
 
-        // TODO: Add variables as arguments when CLI supports --var
-        // for (key, value) in &config.variables {
-        //     cmd.arg("--var")
-        //        .arg(format!("{}={}", key, value));
-        // }
+        // Map variables to CLI service arguments
+        for (key, value) in &config.variables {
+            if let Value::String(string_value) = value {
+                match key.as_str() {
+                    "auth_provider" => {
+                        cmd.arg("--auth").arg(string_value);
+                    }
+                    "api_pattern" => {
+                        cmd.arg("--api").arg(string_value);
+                    }
+                    "database_provider" => {
+                        cmd.arg("--database").arg(string_value);
+                    }
+                    "ai_provider" => {
+                        cmd.arg("--ai").arg(string_value);
+                    }
+                    "payment_provider" => {
+                        cmd.arg("--payments").arg(string_value);
+                    }
+                    "deployment_target" => {
+                        cmd.arg("--deployment").arg(string_value);
+                    }
+                    "monitoring" => {
+                        cmd.arg("--monitoring").arg(string_value);
+                    }
+                    "language" => {
+                        cmd.arg("--language").arg(string_value);
+                    }
+                    _ => {
+                        // For other variables, we'll ignore them for now
+                        // as they are not service-related
+                    }
+                }
+            }
+        }
 
         // Execute generation
         let output = cmd.output().await?;

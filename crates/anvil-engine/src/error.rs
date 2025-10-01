@@ -1,5 +1,5 @@
-use thiserror::Error;
 use std::path::PathBuf;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum EngineError {
@@ -10,16 +10,16 @@ pub enum EngineError {
     InvalidConfig { reason: String },
 
     #[error("File operation failed: {path}")]
-    FileError { 
+    FileError {
         path: PathBuf,
         #[source]
-        source: std::io::Error 
+        source: std::io::Error,
     },
 
-    #[error("Template processing failed")]
+    #[error("Template processing failed: {0}")]
     ProcessingError(#[from] tera::Error),
 
-    #[error("YAML parsing failed")]
+    #[error("YAML parsing failed: {0}")]
     YamlError(#[from] serde_yaml::Error),
 
     #[error("Variable validation failed: {variable}: {reason}")]
@@ -38,15 +38,17 @@ impl EngineError {
     pub fn template_not_found(name: impl Into<String>) -> Self {
         Self::TemplateNotFound { name: name.into() }
     }
-    
+
     pub fn invalid_config(reason: impl Into<String>) -> Self {
-        Self::InvalidConfig { reason: reason.into() }
+        Self::InvalidConfig {
+            reason: reason.into(),
+        }
     }
 
     pub fn file_error(path: impl Into<PathBuf>, source: std::io::Error) -> Self {
-        Self::FileError { 
-            path: path.into(), 
-            source 
+        Self::FileError {
+            path: path.into(),
+            source,
         }
     }
 
@@ -57,7 +59,10 @@ impl EngineError {
         }
     }
 
-    pub fn feature_dependency_error(feature: impl Into<String>, dependency: impl Into<String>) -> Self {
+    pub fn feature_dependency_error(
+        feature: impl Into<String>,
+        dependency: impl Into<String>,
+    ) -> Self {
         Self::FeatureDependencyError {
             feature: feature.into(),
             dependency: dependency.into(),
@@ -65,6 +70,8 @@ impl EngineError {
     }
 
     pub fn composition_error(reason: impl Into<String>) -> Self {
-        Self::CompositionError { reason: reason.into() }
+        Self::CompositionError {
+            reason: reason.into(),
+        }
     }
 }
