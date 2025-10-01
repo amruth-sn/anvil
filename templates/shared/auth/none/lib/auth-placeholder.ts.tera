@@ -1,0 +1,24 @@
+/**
+ * Authentication Placeholder
+ * 
+ * This file is a placeholder for future authentication integration.
+ * Your project was generated without authentication.
+ * 
+ * To add authentication, consider:
+ * - Clerk (https://clerk.com)
+ * - Auth0 (https://auth0.com)
+ * - Supabase Auth (https://supabase.com/auth)
+ * - Firebase Auth (https://firebase.google.com/products/auth)
+ * - NextAuth.js (https://next-auth.js.org)
+ */
+
+export const AUTH_ENABLED = false;
+
+export function isAuthenticated(): boolean {
+  return false;
+}
+
+export function getUser() {
+  return null;
+}
+

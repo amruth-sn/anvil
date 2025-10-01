@@ -1,0 +1,50 @@
+import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+
+const firebaseAdminConfig = {
+  credential: cert({
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+    privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+  }),
+};
+
+// Initialize Firebase Admin
+export const adminApp = !getApps().length
+  ? initializeApp(firebaseAdminConfig)
+  : getApps()[0];
+
+export const adminAuth = getAuth(adminApp);
+
+// Verify Firebase ID token
+export async function verifyIdToken(idToken: string) {
+  try {
+    const decodedToken = await adminAuth.verifyIdToken(idToken);
+    return decodedToken;
+  } catch (error) {
+    console.error('Error verifying token:', error);
+    throw error;
+  }
+}
+
+// Get user by UID
+export async function getUserByUid(uid: string) {
+  try {
+    const user = await adminAuth.getUser(uid);
+    return user;
+  } catch (error) {
+    console.error('Error getting user:', error);
+    throw error;
+  }
+}
+
+// Create custom claims
+export async function setCustomClaims(uid: string, claims: object) {
+  try {
+    await adminAuth.setCustomUserClaims(uid, claims);
+  } catch (error) {
+    console.error('Error setting custom claims:', error);
+    throw error;
+  }
+}
+
