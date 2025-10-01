@@ -7,22 +7,22 @@ import { useEffect } from "react"
 interface ProtectedRouteProps {
   children: React.ReactNode
   fallback?: React.ReactNode
-  {% if auth_config_enable_role_management %}
+  
   requiredRole?: string
   requiredPermission?: string
   requiredRoles?: string[]
-  {% endif %}
+  
   redirectTo?: string
 }
 
 export function ProtectedRoute({ 
   children, 
   fallback,
-  {% if auth_config_enable_role_management %}
+  
   requiredRole,
   requiredPermission,
   requiredRoles,
-  {% endif %}
+  
   redirectTo = "/auth/signin"
 }: ProtectedRouteProps) {
   const { data: session, status } = useSession()
@@ -38,7 +38,7 @@ export function ProtectedRoute({
       return
     }
 
-    {% if auth_config_enable_role_management %}
+    
     // Check role-based access
     if (requiredRole && session.user.role !== requiredRole) {
       router.push("/auth/access-denied")
@@ -58,8 +58,8 @@ export function ProtectedRoute({
         return
       }
     }
-    {% endif %}
-  }, [status, session, router, redirectTo{% if auth_config_enable_role_management %}, requiredRole, requiredPermission, requiredRoles{% endif %}])
+    
+  }, [status, session, router, redirectTo, requiredRole, requiredPermission, requiredRoles])
 
   // Loading state
   if (status === "loading") {
@@ -71,7 +71,7 @@ export function ProtectedRoute({
     return fallback || <ProtectedRouteLoading />
   }
 
-  {% if auth_config_enable_role_management %}
+  
   // Check access control
   if (requiredRole && session.user.role !== requiredRole) {
     return <AccessDenied requiredRole={requiredRole} userRole={session.user.role} />
@@ -87,7 +87,7 @@ export function ProtectedRoute({
       return <AccessDenied requiredPermission={requiredPermission} />
     }
   }
-  {% endif %}
+  
 
   return <>{children}</>
 }
@@ -103,7 +103,7 @@ function ProtectedRouteLoading() {
   )
 }
 
-{% if auth_config_enable_role_management %}
+
 function AccessDenied({ 
   requiredRole, 
   requiredRoles,
@@ -159,17 +159,17 @@ function AccessDenied({
     </div>
   )
 }
-{% endif %}
+
 
 // Higher-order component version
 export function withProtectedRoute<P extends object>(
   Component: React.ComponentType<P>,
   options?: {
-    {% if auth_config_enable_role_management %}
+    
     requiredRole?: string
     requiredPermission?: string
     requiredRoles?: string[]
-    {% endif %}
+    
     redirectTo?: string
   }
 ) {
@@ -182,7 +182,7 @@ export function withProtectedRoute<P extends object>(
   }
 }
 
-{% if auth_config_enable_role_management %}
+
 // Role checking hook
 export function useRole() {
   const { data: session } = useSession()
@@ -209,4 +209,3 @@ export function useRole() {
     hasAnyRole,
   }
 }
-{% endif %}

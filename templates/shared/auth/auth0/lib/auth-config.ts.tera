@@ -1,14 +1,7 @@
 import { NextAuthConfig } from "next-auth"
 import Auth0Provider from "next-auth/providers/auth0"
-{% if auth_config_enable_database_adapter %}
-import { PrismaAdapter } from "@auth/prisma-adapter"
-import { prisma } from "@/lib/prisma"
-{% endif %}
 
 export const authConfig: NextAuthConfig = {
-  {% if auth_config_enable_database_adapter %}
-  adapter: PrismaAdapter(prisma),
-  {% endif %}
   
   providers: [
     Auth0Provider({
@@ -17,23 +10,16 @@ export const authConfig: NextAuthConfig = {
       issuer: process.env.AUTH0_ISSUER!,
       authorization: {
         params: {
-          scope: "openid email profile{% if auth_config_enable_role_management %} read:user_idp_tokens{% endif %}",
+          scope: "openid email profile",
         },
       },
     }),
   ],
 
-  {% if auth_config_session_strategy == "jwt" %}
   session: {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
-  {% else %}
-  session: {
-    strategy: "database",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-  },
-  {% endif %}
 
   pages: {
     signIn: "/auth/signin",
@@ -49,15 +35,13 @@ export const authConfig: NextAuthConfig = {
         token.idToken = account.id_token
       }
 
-      {% if auth_config_enable_role_management %}
-      // Add role and permissions to token
-      if (user) {
-        // Extract roles from Auth0 user metadata
+      // Add role and permissions to token (optional - configure in Auth0)
+      if (user && profile) {
         const auth0User = profile as any
-        token.role = auth0User?.["https://{{ auth_config_auth0_domain }}/roles"]?.[0] || "user"
-        token.permissions = auth0User?.["https://{{ auth_config_auth0_domain }}/permissions"] || []
+        const domain = process.env.AUTH0_ISSUER?.replace('https://', '') || 'your-domain.auth0.com'
+        token.role = auth0User?.[`https://${domain}/roles`]?.[0] || "user"
+        token.permissions = auth0User?.[`https://${domain}/permissions`] || []
       }
-      {% endif %}
 
       return token
     },
@@ -66,40 +50,18 @@ export const authConfig: NextAuthConfig = {
       // Send properties to the client
       if (token) {
         session.accessToken = token.accessToken as string
-        {% if auth_config_enable_role_management %}
         session.user.role = token.role as string
         session.user.permissions = token.permissions as string[]
-        {% endif %}
       }
-
-      {% if auth_config_enable_database_adapter %}
-      // When using database sessions, user data comes from the database
-      if (user) {
-        session.user.id = user.id
-        {% if auth_config_enable_role_management %}
-        // You might want to fetch role from your database here
-        // session.user.role = await getUserRole(user.id)
-        {% endif %}
-      }
-      {% endif %}
 
       return session
     },
 
     async signIn({ user, account, profile, email, credentials }) {
       // Control who can sign in
-      {% if auth_config_allowed_domains %}
-      const allowedDomains = "{{ auth_config_allowed_domains }}".split(',').map(d => d.trim())
-      const userEmail = user.email || email?.email
+      // Add your custom sign-in logic here
+      // Example: domain restrictions, user allowlisting, etc.
       
-      if (userEmail) {
-        const domain = userEmail.split('@')[1]
-        if (!allowedDomains.includes(domain)) {
-          return false // Reject sign in
-        }
-      }
-      {% endif %}
-
       return true
     },
 
@@ -143,18 +105,14 @@ declare module "next-auth" {
       name?: string | null
       email?: string | null
       image?: string | null
-      {% if auth_config_enable_role_management %}
       role?: string
       permissions?: string[]
-      {% endif %}
     }
   }
 
   interface User {
-    {% if auth_config_enable_role_management %}
     role?: string
     permissions?: string[]
-    {% endif %}
   }
 }
 
@@ -162,9 +120,7 @@ declare module "next-auth/jwt" {
   interface JWT {
     accessToken?: string
     idToken?: string
-    {% if auth_config_enable_role_management %}
     role?: string
     permissions?: string[]
-    {% endif %}
   }
 }

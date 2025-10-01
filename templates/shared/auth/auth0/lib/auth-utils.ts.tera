@@ -25,7 +25,7 @@ export async function requireUser() {
   return session.user
 }
 
-{% if auth_config_enable_role_management %}
+
 // Role and permission checking
 export async function requireRole(requiredRole: string) {
   const user = await requireUser()
@@ -92,7 +92,7 @@ export const PERMISSIONS = {
 
 export type UserRole = typeof ROLES[keyof typeof ROLES]
 export type UserPermission = typeof PERMISSIONS[keyof typeof PERMISSIONS]
-{% endif %}
+
 
 // Session helpers
 export async function isAuthenticated(): Promise<boolean> {
@@ -104,11 +104,11 @@ export async function isAuthenticated(): Promise<boolean> {
 export function createProtectedHandler(
   handler: (session: any) => Promise<Response>,
   options?: {
-    {% if auth_config_enable_role_management %}
+    
     requiredRole?: string
     requiredPermission?: string
     requiredRoles?: string[]
-    {% endif %}
+    
   }
 ) {
   return async (req: Request) => {
@@ -122,7 +122,7 @@ export function createProtectedHandler(
         })
       }
 
-      {% if auth_config_enable_role_management %}
+      
       if (options?.requiredRole && session.user.role !== options.requiredRole) {
         return new Response(JSON.stringify({ error: "Insufficient permissions" }), {
           status: 403,
@@ -146,7 +146,7 @@ export function createProtectedHandler(
           headers: { "Content-Type": "application/json" }
         })
       }
-      {% endif %}
+      
       
       return await handler(session)
     } catch (error) {

@@ -28,7 +28,7 @@ export default withAuth(
       return NextResponse.redirect(new URL("/dashboard", req.url))
     }
 
-    {% if auth_config_enable_role_management %}
+    
     // Role-based route protection
     if (isAuth && token) {
       const userRole = token.role as string
@@ -49,7 +49,7 @@ export default withAuth(
         return NextResponse.redirect(new URL("/auth/access-denied", req.url))
       }
     }
-    {% endif %}
+    
 
     return NextResponse.next()
   },
