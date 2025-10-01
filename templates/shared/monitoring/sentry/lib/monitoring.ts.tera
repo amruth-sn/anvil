@@ -1,0 +1,45 @@
+import * as Sentry from '@sentry/nextjs';
+
+export function initMonitoring() {
+  const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+  
+  if (!dsn) {
+    console.warn('Sentry DSN not found. Error monitoring is disabled.');
+    return;
+  }
+
+  Sentry.init({
+    dsn,
+    tracesSampleRate: 1.0,
+    debug: process.env.NODE_ENV === 'development',
+    environment: process.env.NODE_ENV,
+    beforeSend(event, hint) {
+      // Filter out errors in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error(hint.originalException || hint.syntheticException);
+        return null;
+      }
+      return event;
+    },
+  });
+}
+
+export function captureError(error: Error, context?: Record<string, any>) {
+  if (context) {
+    Sentry.setContext('additional', context);
+  }
+  Sentry.captureException(error);
+}
+
+export function captureMessage(message: string, level: Sentry.SeverityLevel = 'info') {
+  Sentry.captureMessage(message, level);
+}
+
+export function setUser(user: { id: string; email?: string; username?: string }) {
+  Sentry.setUser(user);
+}
+
+export function clearUser() {
+  Sentry.setUser(null);
+}
+

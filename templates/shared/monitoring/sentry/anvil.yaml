@@ -1,0 +1,53 @@
+name: "sentry-monitoring"
+description: "Sentry error tracking and performance monitoring"
+version: "1.0.0"
+category: "monitoring"
+
+dependencies:
+  npm:
+    - "@sentry/nextjs@^7.91.0"
+
+environment_variables:
+  - name: "NEXT_PUBLIC_SENTRY_DSN"
+    description: "Sentry Data Source Name (DSN)"
+    required: true
+  - name: "SENTRY_ORG"
+    description: "Sentry organization slug"
+    required: false
+  - name: "SENTRY_PROJECT"
+    description: "Sentry project slug"
+    required: false
+  - name: "SENTRY_AUTH_TOKEN"
+    description: "Sentry auth token for releases"
+    required: false
+
+configuration_prompts:
+  - name: "enable_performance_monitoring"
+    prompt: "Enable performance monitoring?"
+    prompt_type: "boolean"
+    default: "true"
+  - name: "enable_session_replay"
+    prompt: "Enable session replay?"
+    prompt_type: "boolean"
+    default: "false"
+  - name: "sample_rate"
+    prompt: "Error sample rate (0.0 to 1.0)?"
+    prompt_type: "text"
+    default: "1.0"
+
+files:
+  - path: "lib/monitoring.ts"
+    description: "Sentry monitoring setup and configuration"
+  - path: "sentry.client.config.ts"
+    description: "Sentry client-side configuration"
+  - path: "sentry.server.config.ts"
+    description: "Sentry server-side configuration"
+  - path: "sentry.edge.config.ts"
+    description: "Sentry edge runtime configuration"
+
+setup_instructions: |
+  🚀 Sentry Monitoring Setup:
+  1. Create Sentry account at https://sentry.io
+  2. Create new project for Next.js
+  3. Copy DSN to NEXT_PUBLIC_SENTRY_DSN
+  4. Configure source maps upload (optional)
