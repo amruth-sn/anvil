@@ -1,0 +1,20 @@
+name: "no-database"
+description: "No database - for static sites or custom database solutions"
+version: "1.0.0"
+category: "database"
+
+dependencies:
+  npm: []
+
+environment_variables: []
+
+configuration_prompts: []
+
+files:
+  - path: "lib/database-placeholder.ts"
+    description: "Placeholder for future database integration"
+
+setup_instructions: |
+  ℹ️  No Database:
+  This project doesn't include a database.
+  You can add one later by integrating Supabase, Neon, MongoDB, or PlanetScale.

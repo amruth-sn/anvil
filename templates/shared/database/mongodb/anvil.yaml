@@ -26,9 +26,9 @@ configuration_prompts:
 files:
   - path: "lib/mongodb.ts"
     description: "MongoDB connection setup"
-  - path: "lib/models/User.ts"
+  - path: "models/User.ts"
     description: "User model schema"
-  - path: "lib/models/index.ts"
+  - path: "models/index.ts"
     description: "Model exports"
 
 setup_instructions: |
