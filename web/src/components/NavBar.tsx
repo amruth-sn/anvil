@@ -293,7 +293,7 @@ export default function NavBar() {
                     <div>
                       <div className="font-medium">Changelog</div>
                       <p className="text-sm text-foreground/70">
-                        Stay up to date with latest changes
+                        Stay up to date with the latest changes
                       </p>
                     </div>
                   </Link>
