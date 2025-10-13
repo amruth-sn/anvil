@@ -631,18 +631,18 @@ async fn test_all_service_compatibility() {
     // Summary - count both successful generations and correctly rejected invalid inputs
     let total_tests = all_results.len();
     let total_files = all_results.iter().map(|r| r.files_created).sum::<usize>();
-    
+
     // Count successes including correctly rejected invalid inputs
     let mut successful_tests = 0;
     let mut correctly_rejected = 0;
-    
+
     for (i, result) in all_results.iter().enumerate() {
         let is_invalid_combination_test =
             i >= invalid_combinations_start_index && i < invalid_combinations_end_index;
-        let is_trpc_invalid_test = i >= trpc_compat_start_index 
-            && i < trpc_compat_end_index 
+        let is_trpc_invalid_test = i >= trpc_compat_start_index
+            && i < trpc_compat_end_index
             && i == trpc_compat_start_index + 1; // Second test is the invalid one
-        
+
         if result.success {
             if is_invalid_combination_test || is_trpc_invalid_test {
                 // Invalid test that succeeded is actually a failure
@@ -662,7 +662,10 @@ async fn test_all_service_compatibility() {
     println!("   Total tests: {}", total_tests);
     println!("   Successful: {}", successful_tests);
     if correctly_rejected > 0 {
-        println!("   (includes {} correctly rejected invalid inputs)", correctly_rejected);
+        println!(
+            "   (includes {} correctly rejected invalid inputs)",
+            correctly_rejected
+        );
     }
     println!(
         "   Success rate: {:.1}%",
@@ -675,8 +678,8 @@ async fn test_all_service_compatibility() {
     for (i, result) in all_results.iter().enumerate() {
         let is_invalid_combination_test =
             i >= invalid_combinations_start_index && i < invalid_combinations_end_index;
-        let is_trpc_invalid_test = i >= trpc_compat_start_index 
-            && i < trpc_compat_end_index 
+        let is_trpc_invalid_test = i >= trpc_compat_start_index
+            && i < trpc_compat_end_index
             && i == trpc_compat_start_index + 1; // Second test is the invalid one
 
         if !result.success {
