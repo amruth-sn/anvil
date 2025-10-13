@@ -628,14 +628,42 @@ async fn test_all_service_compatibility() {
     }
     let invalid_combinations_end_index = all_results.len();
 
-    // Summary
+    // Summary - count both successful generations and correctly rejected invalid inputs
     let total_tests = all_results.len();
-    let successful_tests = all_results.iter().filter(|r| r.success).count();
     let total_files = all_results.iter().map(|r| r.files_created).sum::<usize>();
+    
+    // Count successes including correctly rejected invalid inputs
+    let mut successful_tests = 0;
+    let mut correctly_rejected = 0;
+    
+    for (i, result) in all_results.iter().enumerate() {
+        let is_invalid_combination_test =
+            i >= invalid_combinations_start_index && i < invalid_combinations_end_index;
+        let is_trpc_invalid_test = i >= trpc_compat_start_index 
+            && i < trpc_compat_end_index 
+            && i == trpc_compat_start_index + 1; // Second test is the invalid one
+        
+        if result.success {
+            if is_invalid_combination_test || is_trpc_invalid_test {
+                // Invalid test that succeeded is actually a failure
+                continue;
+            }
+            successful_tests += 1;
+        } else {
+            if is_invalid_combination_test || is_trpc_invalid_test {
+                // Invalid test that failed is actually a success
+                successful_tests += 1;
+                correctly_rejected += 1;
+            }
+        }
+    }
 
     println!("\n📊 Service Compatibility Test Summary:");
     println!("   Total tests: {}", total_tests);
     println!("   Successful: {}", successful_tests);
+    if correctly_rejected > 0 {
+        println!("   (includes {} correctly rejected invalid inputs)", correctly_rejected);
+    }
     println!(
         "   Success rate: {:.1}%",
         (successful_tests as f64 / total_tests as f64) * 100.0
