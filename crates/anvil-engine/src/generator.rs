@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
@@ -122,8 +123,10 @@ impl FileGenerator {
             .await
             .map_err(|e| EngineError::file_error(path, e))?;
         
-        let permissions = metadata.permissions();
-        let _mode = permissions.mode();
+        let mut permissions = metadata.permissions();
+        let mode = permissions.mode();
+        // Set user, group, and other execute bits (0o111) while preserving other permission bits
+        permissions.set_mode(mode | 0o111);
         
         fs::set_permissions(path, permissions)
             .await

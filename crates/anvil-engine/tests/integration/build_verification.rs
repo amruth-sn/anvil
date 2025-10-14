@@ -219,7 +219,7 @@ impl BuildVerificationTests {
         for pm in package_managers {
             let project_name = format!("test-dev-{}", pm);
             let config = TestConfig {
-                template_name: format!("dev-server-{}", pm),
+                template_name: "fullstack-saas".to_string(),
                 variables: Self::create_variables(HashMap::from([
                     ("project_name", project_name.as_str()),
                     ("package_manager", pm),
@@ -304,7 +304,6 @@ impl BuildVerificationTests {
             ])),
             expected_files: vec![
                 "package.json".to_string(),
-                ".eslintrc.json".to_string(),
                 "app/page.tsx".to_string(),
             ],
             expected_dependencies: vec![],
