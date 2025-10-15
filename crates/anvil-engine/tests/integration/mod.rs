@@ -99,10 +99,24 @@ impl IntegrationTestSuite {
         };
 
         // Try release binary first, then debug binary
-        let anvil_binary = if workspace_dir.join("target/release/anvil").exists() {
-            workspace_dir.join("target/release/anvil")
-        } else if workspace_dir.join("target/debug/anvil").exists() {
-            workspace_dir.join("target/debug/anvil")
+        let binary_name = if cfg!(target_os = "windows") {
+            "anvil.exe"
+        } else {
+            "anvil"
+        };
+
+        let anvil_binary = if workspace_dir
+            .join("target/release")
+            .join(binary_name)
+            .exists()
+        {
+            workspace_dir.join("target/release").join(binary_name)
+        } else if workspace_dir
+            .join("target/debug")
+            .join(binary_name)
+            .exists()
+        {
+            workspace_dir.join("target/debug").join(binary_name)
         } else {
             anyhow::bail!(
                 "Anvil binary not found. Run 'cargo build' or 'cargo build --release' first."

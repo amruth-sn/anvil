@@ -21,10 +21,17 @@ async fn benchmark_generation_performance() {
         .parent()
         .expect("Failed to get grandparent");
     
-    let anvil_binary = if cfg!(target_os = "windows") {
-        workspace_dir.join("target/debug/anvil.exe")
+    let binary_name = if cfg!(target_os = "windows") {
+        "anvil.exe"
     } else {
-        workspace_dir.join("target/debug/anvil")
+        "anvil"
+    };
+    
+    // Try release binary first, then debug binary
+    let anvil_binary = if workspace_dir.join("target/release").join(binary_name).exists() {
+        workspace_dir.join("target/release").join(binary_name)
+    } else {
+        workspace_dir.join("target/debug").join(binary_name)
     };
     
     // Test different templates for performance
@@ -100,10 +107,17 @@ async fn benchmark_concurrent_generation() {
         .parent()
         .expect("Failed to get grandparent");
     
-    let anvil_binary = if cfg!(target_os = "windows") {
-        workspace_dir.join("target/debug/anvil.exe")
+    let binary_name = if cfg!(target_os = "windows") {
+        "anvil.exe"
     } else {
-        workspace_dir.join("target/debug/anvil")
+        "anvil"
+    };
+    
+    // Try release binary first, then debug binary
+    let anvil_binary = if workspace_dir.join("target/release").join(binary_name).exists() {
+        workspace_dir.join("target/release").join(binary_name)
+    } else {
+        workspace_dir.join("target/debug").join(binary_name)
     };
     
     let start_time = Instant::now();
@@ -185,10 +199,17 @@ fn benchmark_memory_usage() {
         .parent()
         .expect("Failed to get grandparent");
     
-    let anvil_binary = if cfg!(target_os = "windows") {
-        workspace_dir.join("target/debug/anvil.exe")
+    let binary_name = if cfg!(target_os = "windows") {
+        "anvil.exe"
     } else {
-        workspace_dir.join("target/debug/anvil")
+        "anvil"
+    };
+    
+    // Try release binary first, then debug binary
+    let anvil_binary = if workspace_dir.join("target/release").join(binary_name).exists() {
+        workspace_dir.join("target/release").join(binary_name)
+    } else {
+        workspace_dir.join("target/debug").join(binary_name)
     };
     
     let output = Command::new(&anvil_binary)

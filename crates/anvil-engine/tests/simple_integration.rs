@@ -24,10 +24,17 @@ async fn test_basic_anvil_generation() {
         .parent()
         .expect("Failed to get grandparent");
     
-    let anvil_binary = if cfg!(target_os = "windows") {
-        workspace_dir.join("target/debug/anvil.exe")
+    let binary_name = if cfg!(target_os = "windows") {
+        "anvil.exe"
     } else {
-        workspace_dir.join("target/debug/anvil")
+        "anvil"
+    };
+    
+    // Try release binary first, then debug binary
+    let anvil_binary = if workspace_dir.join("target/release").join(binary_name).exists() {
+        workspace_dir.join("target/release").join(binary_name)
+    } else {
+        workspace_dir.join("target/debug").join(binary_name)
     };
     
     // Test basic project generation from anvil workspace
@@ -73,13 +80,20 @@ async fn test_basic_anvil_generation() {
 fn test_anvil_binary_exists() {
     println!("🔍 Checking if anvil binary exists");
     
-    let anvil_binary = if cfg!(target_os = "windows") {
-        "../../target/debug/anvil.exe"
+    let binary_name = if cfg!(target_os = "windows") {
+        "anvil.exe"
     } else {
-        "../../target/debug/anvil"
+        "anvil"
     };
     
-    let binary_path = std::path::Path::new(anvil_binary);
+    // Try release binary first, then debug binary
+    let anvil_binary = if std::path::Path::new("../../target/release").join(binary_name).exists() {
+        format!("../../target/release/{}", binary_name)
+    } else {
+        format!("../../target/debug/{}", binary_name)
+    };
+    
+    let binary_path = std::path::Path::new(&anvil_binary);
     assert!(binary_path.exists(), "Anvil binary should exist at {}", anvil_binary);
     
     println!("✅ Anvil binary found at: {}", anvil_binary);
