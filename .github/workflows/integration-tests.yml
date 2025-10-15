@@ -124,7 +124,7 @@ jobs:
             x86_64-unknown-linux-gnu
             x86_64-apple-darwin
             aarch64-apple-darwin
-            x86_64-pc-windows-msvc
+            x86_64-pc-windows-gnu
 
       - name: Cache cross compilation
         uses: actions/cache@v3
@@ -135,10 +135,14 @@ jobs:
             target/
           key: cross-compile-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Cross compile for different targets
+      - name: Check cross-compilation compatibility
         run: |
-          cargo build --target x86_64-unknown-linux-gnu --release
-          cargo build --target x86_64-pc-windows-msvc --release
+          # Use 'cargo check' instead of 'cargo build' to verify code compiles for different targets
+          # without requiring platform-specific linkers
+          cargo check --target x86_64-unknown-linux-gnu --release
+          cargo check --target x86_64-apple-darwin --release
+          cargo check --target aarch64-apple-darwin --release
+          cargo check --target x86_64-pc-windows-gnu --release
 
       - name: Test template compatibility across platforms
         run: |
@@ -278,25 +282,7 @@ jobs:
           wait
           echo "✅ Concurrent generation completed"
 
-  notification:
-    name: Notify on Failure
-    runs-on: ubuntu-latest
-    needs:
-      [
-        integration-tests,
-        cross-platform-compatibility,
-        template-validation,
-        security-checks,
-        documentation-tests,
-        performance-tests,
-      ]
-    if: failure() && github.ref == 'refs/heads/main'
 
-    steps:
-      - name: Send notification
-        run: |
-          echo "Integration tests failed on main branch"
-          # Add notification logic here (Slack, Discord, email, etc.)
 
   summary:
     name: Test Summary
