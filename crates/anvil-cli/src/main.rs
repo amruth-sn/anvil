@@ -424,14 +424,14 @@ async fn create_project(options: CreateOptions) -> Result<()> {
 
     if options.git && !options.dry_run {
         println!(
-            "{} Git initialization will be implemented in Stage 3",
+            "{} Git initialization is a WIP",
             "🔮".bright_magenta()
         );
     }
 
     if options.github && !options.dry_run {
         println!(
-            "{} GitHub integration will be implemented in Stage 4",
+            "{} GitHub integration is a WIP",
             "🔮".bright_magenta()
         );
     }
