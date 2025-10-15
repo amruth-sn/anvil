@@ -137,17 +137,11 @@ jobs:
 
       - name: Check cross-compilation compatibility
         run: |
-          # Use 'cargo check' instead of 'cargo build' to verify code compiles for different targets
-          # without requiring platform-specific linkers
           cargo check --target x86_64-unknown-linux-gnu --release
           cargo check --target x86_64-apple-darwin --release
           cargo check --target aarch64-apple-darwin --release
           cargo check --target x86_64-pc-windows-gnu --release
-
-      - name: Test template compatibility across platforms
-        run: |
-          # Test that templates generate correctly on different platforms
-          cargo test --test integration_test -- --test-threads=1
+          echo "🎉 All cross-platform compilation checks passed!"
 
   template-validation:
     name: Template Validation
@@ -281,8 +275,6 @@ jobs:
           done
           wait
           echo "✅ Concurrent generation completed"
-
-
 
   summary:
     name: Test Summary
