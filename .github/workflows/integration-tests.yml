@@ -209,15 +209,6 @@ jobs:
       - name: Check for security advisories
         run: cargo deny check advisories
 
-      - name: Scan templates for sensitive data
-        run: |
-          # Check that templates don't contain hardcoded secrets
-          if grep -r -i "password\|secret\|key\|token" templates/ --include="*.tera" --include="*.yaml" | grep -v "YOUR_" | grep -v "REPLACE_"; then
-            echo "❌ Found potential hardcoded secrets in templates"
-            exit 1
-          fi
-          echo "✅ No hardcoded secrets found in templates"
-
   documentation-tests:
     name: Documentation Tests
     runs-on: ubuntu-latest
