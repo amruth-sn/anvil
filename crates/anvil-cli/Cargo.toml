@@ -5,11 +5,19 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "CLI tool for the Anvil universal template engine"
+readme = "../../README.md"
 
 [[bin]]
 name = "anvil"
 path = "src/main.rs"
+
+[package.metadata.docs.rs]
+all-features = true
 
 [dependencies]
 # Workspace dependencies
