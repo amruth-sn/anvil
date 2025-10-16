@@ -22,7 +22,6 @@ pub struct TemplateConfig {
     #[serde(default = "default_min_anvil_version")]
     pub min_anvil_version: String,
 
-    // Service composition support
     #[serde(default)]
     pub services: Vec<ServiceDefinition>,
 
@@ -189,7 +188,6 @@ pub struct ServicePrompt {
     pub description: Option<String>,
 }
 
-// Custom deserializer to handle both string and array defaults
 fn deserialize_default_value<'de, D>(deserializer: D) -> Result<Option<Value>, D::Error>
 where
     D: serde::Deserializer<'de>,

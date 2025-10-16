@@ -171,7 +171,6 @@ impl TemplateEngine {
                 .to_path_buf();
             
             let output_path = if relative_path.extension().and_then(|e| e.to_str()) == Some("tera") {
-                // Remove .tera extension: package.json.tera -> package.json
                 let file_name = relative_path.file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("")
@@ -326,14 +325,13 @@ impl TemplateEngine {
     fn pascal_case_filter(value: &tera::Value, _: &HashMap<String, tera::Value>) -> tera::Result<tera::Value> {
         let s = value.as_str().ok_or_else(|| tera::Error::msg("Value must be a string"))?;
         
-        // First, split by common delimiters and handle camelCase/PascalCase
+        // Handle camelCase/PascalCase
         let mut words = Vec::new();
         for segment in s.split(&[' ', '_', '-'][..]) {
             if segment.is_empty() {
                 continue;
             }
             
-            // Split camelCase/PascalCase by detecting uppercase letters
             let mut current_word = String::new();
             for ch in segment.chars() {
                 if ch.is_uppercase() && !current_word.is_empty() {
@@ -389,7 +387,6 @@ impl TemplateEngine {
     ) -> EngineResult<tera::Context> {
         let mut tera_context = user_context.to_tera_context();
         
-        // Add template metadata
         tera_context.insert("template", &serde_json::json!({
             "name": composed.base_config.name,
             "description": composed.base_config.description,
@@ -397,7 +394,6 @@ impl TemplateEngine {
             "min_anvil_version": composed.base_config.min_anvil_version
         }));
         
-        // Add build context
         let now: DateTime<Utc> = Utc::now();
         tera_context.insert("build", &serde_json::json!({
             "timestamp": now.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
@@ -407,13 +403,10 @@ impl TemplateEngine {
             "generator_version": env!("CARGO_PKG_VERSION")
         }));
         
-        // Add merged dependencies to context for template rendering
         tera_context.insert("merged_dependencies", &composed.merged_dependencies);
         
-        // Add environment variables to context
         tera_context.insert("environment_variables", &composed.environment_variables);
         
-        // Add service context for dependency injection (flattened for Tera compatibility)
         for (service_name, service_info) in &composed.service_context.services {
             tera_context.insert(&format!("service_{}", service_name.to_lowercase()), &service_info.provider);
             for (export_key, export_value) in &service_info.exports {
@@ -421,12 +414,10 @@ impl TemplateEngine {
             }
         }
         
-        // Add shared config
         for (key, value) in &composed.service_context.shared_config {
             tera_context.insert(key, value);
         }
         
-        // Add service summary for easy template access
         let service_summary: Vec<serde_json::Value> = composed.service_context.services.iter()
             .map(|(name, info)| serde_json::json!({
                 "category": name,
@@ -436,7 +427,6 @@ impl TemplateEngine {
             .collect();
         tera_context.insert("active_services", &service_summary);
         
-        // Add utility flags
         tera_context.insert("has_services", &(!composed.service_context.services.is_empty()));
         tera_context.insert("has_dependencies", &(!composed.merged_dependencies.is_empty()));
         tera_context.insert("has_environment_variables", &(!composed.environment_variables.is_empty()));
