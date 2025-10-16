@@ -21,7 +21,7 @@ all-features = true
 
 [dependencies]
 # Workspace dependencies
-anvil-engine = { path = "../anvil-engine" }
+anvil-engine = { version = "0.1.0", path = "../anvil-engine" }
 tokio = { workspace = true }
 anyhow = { workspace = true }
 
