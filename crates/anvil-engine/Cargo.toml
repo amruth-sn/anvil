@@ -10,7 +10,7 @@ documentation.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "Core template engine for Anvil"
-readme = "../../README.md"
+readme = "../../readme.md"
 
 [dependencies]
 # Workspace dependencies

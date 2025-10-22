@@ -10,7 +10,7 @@ documentation.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "CLI tool for the Anvil universal template engine"
-readme = "../../README.md"
+readme = "../../readme.md"
 
 [[bin]]
 name = "anvil"
